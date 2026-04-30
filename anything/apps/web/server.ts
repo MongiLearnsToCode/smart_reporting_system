@@ -5,10 +5,13 @@ import { contextStorage } from 'hono/context-storage';
 import { cors } from 'hono/cors';
 import { bodyLimit } from 'hono/body-limit';
 import { requestId } from 'hono/request-id';
-import { createHonoServer } from 'react-router-hono-server/node';
+import { createRequestHandler } from 'react-router';
 import { serializeError } from 'serialize-error';
-import { getHTMLForErrorPage } from './get-html-for-error-page';
-import { API_BASENAME, api } from './route-builder';
+import { getHTMLForErrorPage } from './__create/get-html-for-error-page';
+import { API_BASENAME, api } from './__create/route-builder';
+
+// @ts-expect-error - virtual module provided by React Router at build time
+import * as build from 'virtual:react-router/server-build';
 
 const als = new AsyncLocalStorage<{ requestId: string }>();
 
@@ -58,4 +61,7 @@ for (const method of ['post', 'put', 'patch'] as const) {
 
 app.route(API_BASENAME, api);
 
-export default await createHonoServer({ app, defaultLogger: false });
+const handler = createRequestHandler(build);
+app.mount('/', (req) => handler(req));
+
+export default app.fetch;

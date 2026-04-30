@@ -5,7 +5,6 @@ export function createClient() {
   const c = getContext();
   const cookieHeader = c.req.header('cookie') ?? '';
 
-  // Parse cookies from header
   const cookies = Object.fromEntries(
     cookieHeader.split(';').map((s) => {
       const [k, ...v] = s.trim().split('=');

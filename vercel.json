@@ -1,15 +1,4 @@
 {
   "buildCommand": "cd anything/apps/web && bun install && bun run build",
-  "installCommand": "cd anything/apps/web && bun install",
-  "framework": null,
-  "routes": [
-    {
-      "src": "/assets/(.*)",
-      "dest": "/anything/apps/web/build/client/assets/$1"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/anything/apps/web/build/server/index.js"
-    }
-  ]
+  "framework": null
 }

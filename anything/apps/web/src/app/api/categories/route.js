@@ -1,6 +1,6 @@
 import { getUser, createClient } from '../utils/auth';
 
-export async function GET() {
+export async function GET(request) {
   try {
     const user = await getUser();
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
