@@ -9,7 +9,7 @@
 		"typecheck": "react-router typegen && tsc --noEmit"
 	},
 	"dependencies": {
-		"@auth/react": "^0.21.0",
+		"next-auth": "^4.24.11",
 		"@babel/generator": "^7.27.1",
 		"@chakra-ui/react": "2.8.2",
 		"@dnd-kit/core": "^6.3.1",
