@@ -1,0 +1,15 @@
+{
+  "/api/categories/route": "app/api/categories/route.js",
+  "/api/export/route": "app/api/export/route.js",
+  "/api/logs/[id]/route": "app/api/logs/[id]/route.js",
+  "/api/logs/route": "app/api/logs/route.js",
+  "/api/process/route": "app/api/process/route.js",
+  "/api/widgets/route": "app/api/widgets/route.js",
+  "/api/widgets/seed/route": "app/api/widgets/seed/route.js",
+  "/_not-found/page": "app/_not-found/page.js",
+  "/account/signin/page": "app/account/signin/page.js",
+  "/account/signup/page": "app/account/signup/page.js",
+  "/onboarding/page": "app/onboarding/page.js",
+  "/page": "app/page.js",
+  "/widget/[category]/page": "app/widget/[category]/page.js"
+}

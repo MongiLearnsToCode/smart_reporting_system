@@ -1,5 +1,0 @@
-{
-  "framework": "react-router",
-  "buildCommand": "bun run build",
-  "installCommand": "bun install"
-}
