@@ -20,7 +20,6 @@ const routes: { path: string; methods: string[]; file: string }[] = [
   { path: '/export',             methods: ['POST'],          file: '../src/app/api/export/route.js' },
   { path: '/logs',               methods: ['GET'],           file: '../src/app/api/logs/route.js' },
   { path: '/logs/:id',           methods: ['DELETE'],        file: '../src/app/api/logs/[id]/route.js' },
-  { path: '/__create/ssr-test',  methods: ['GET'],           file: '../src/app/api/__create/ssr-test/route.js' },
   { path: '/__create/check-social-secrets', methods: ['GET'], file: '../src/app/api/__create/check-social-secrets/route.js' },
 ];
 
