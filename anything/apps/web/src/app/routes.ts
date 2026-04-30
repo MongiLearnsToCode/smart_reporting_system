@@ -5,7 +5,7 @@ import {
 } from '@react-router/dev/routes';
 
 // Discover all page.jsx files using Vite's import.meta.glob
-const pageFiles = import.meta.glob('./**/page.jsx', { eager: true });
+const pageFiles = import.meta.glob('./**/page.jsx');
 
 type Tree = {
 	path: string;
