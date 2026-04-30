@@ -1,4 +1,0 @@
-{
-  "buildCommand": "cd anything/apps/web && bun install && bun run build",
-  "framework": null
-}
