@@ -1,63 +1,55 @@
-import { readdirSync, statSync } from 'node:fs';
-import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import {
 	type RouteConfigEntry,
 	index,
 	route,
 } from '@react-router/dev/routes';
 
-const __dirname = fileURLToPath(new URL('.', import.meta.url));
+// Discover all page.jsx files using Vite's import.meta.glob
+const pageFiles = import.meta.glob('./**/page.jsx', { eager: true });
 
 type Tree = {
 	path: string;
 	children: Tree[];
 	hasPage: boolean;
-	isParam: boolean;
-	paramName: string;
-	isCatchAll: boolean;
 };
 
-function buildRouteTree(dir: string, basePath = ''): Tree {
-	const files = readdirSync(dir);
-	const node: Tree = {
-		path: basePath,
+function buildRouteTree(): Tree {
+	const root: Tree = {
+		path: '',
 		children: [],
 		hasPage: false,
-		isParam: false,
-		isCatchAll: false,
-		paramName: '',
 	};
 
-	// Check if the current directory name indicates a parameter
-	const dirName = basePath.split('/').pop();
-	if (dirName?.startsWith('[') && dirName.endsWith(']')) {
-		node.isParam = true;
-		const paramName = dirName.slice(1, -1);
+	for (const filePath in pageFiles) {
+		// filePath is like './page.jsx' or './account/signin/page.jsx'
+		const pathParts = filePath.replace('./', '').split('/');
+		pathParts.pop(); // remove 'page.jsx'
 
-		// Check if it's a catch-all parameter (e.g., [...ids])
-		if (paramName.startsWith('...')) {
-			node.isCatchAll = true;
-			node.paramName = paramName.slice(3); // Remove the '...' prefix
-		} else {
-			node.paramName = paramName;
+		let currentNode = root;
+
+		if (pathParts.length === 0) {
+			root.hasPage = true;
+			continue;
 		}
+
+		let currentPath = '';
+		for (const part of pathParts) {
+			currentPath = currentPath ? `${currentPath}/${part}` : part;
+			let child = currentNode.children.find((c) => c.path === currentPath);
+			if (!child) {
+				child = {
+					path: currentPath,
+					children: [],
+					hasPage: false,
+				};
+				currentNode.children.push(child);
+			}
+			currentNode = child;
+		}
+		currentNode.hasPage = true;
 	}
 
-	for (const file of files) {
-		const filePath = join(dir, file);
-		const stat = statSync(filePath);
-
-		if (stat.isDirectory()) {
-			const childPath = basePath ? `${basePath}/${file}` : file;
-			const childNode = buildRouteTree(filePath, childPath);
-			node.children.push(childNode);
-		} else if (file === 'page.jsx') {
-			node.hasPage = true;
-    }
-	}
-
-	return node;
+	return root;
 }
 
 function generateRoutes(node: Tree): RouteConfigEntry[] {
@@ -65,7 +57,7 @@ function generateRoutes(node: Tree): RouteConfigEntry[] {
 
 	if (node.hasPage) {
 		const componentPath =
-			node.path === '' ? `./${node.path}page.jsx` : `./${node.path}/page.jsx`;
+			node.path === '' ? `./page.jsx` : `./${node.path}/page.jsx`;
 
 		if (node.path === '') {
 			routes.push(index(componentPath));
@@ -104,15 +96,8 @@ function generateRoutes(node: Tree): RouteConfigEntry[] {
 
 	return routes;
 }
-if (import.meta.env.DEV) {
-	import.meta.glob('./**/page.jsx', {});
-	if (import.meta.hot) {
-		import.meta.hot.accept((newSelf) => {
-			import.meta.hot?.invalidate();
-		});
-	}
-}
-const tree = buildRouteTree(__dirname);
+
+const tree = buildRouteTree();
 const notFound = route('*', './__create/not-found.tsx');
 const routes = [...generateRoutes(tree), notFound];
 
