@@ -18,7 +18,10 @@ export default defineConfig(({ isSsrBuild }) => ({
   build: {
     target: 'esnext',
     rollupOptions: isSsrBuild
-      ? { input: './server.ts' }
+      ? {
+          input: './server.ts',
+          external: (id) => !id.startsWith('.') && !id.startsWith('/') && !id.includes('virtual:'),
+        }
       : undefined,
   },
   optimizeDeps: {
