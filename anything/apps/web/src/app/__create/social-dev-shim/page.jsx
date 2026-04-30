@@ -1,6 +1,6 @@
 'use client';
 
-import { signIn } from '@auth/create/react';
+import { createClient } from '@/utils/supabase/client';
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 
@@ -56,7 +56,12 @@ export default function SocialDevShimPage() {
 		setLoading(true);
 		setError(null);
 		try {
-			await signIn('dev-social', { email, name, provider, callbackUrl });
+			const supabase = createClient();
+			const { error } = await supabase.auth.signInWithOAuth({
+				provider,
+				options: { redirectTo: callbackUrl },
+			});
+			if (error) throw error;
 		} catch (err) {
 			setError(
 				err instanceof Error

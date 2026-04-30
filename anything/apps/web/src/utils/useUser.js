@@ -1,33 +1,29 @@
 import * as React from 'react';
-import { useSession } from "@auth/create/react";
-
+import { createClient } from './supabase/client';
 
 const useUser = () => {
-  const { data: session, status } = useSession();
-  const id = session?.user?.id
+  const [user, setUser] = React.useState(null);
+  const [loading, setLoading] = React.useState(true);
 
-  const [user, setUser] = React.useState(session?.user ?? null);
+  React.useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      setUser(user);
+      setLoading(false);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
 
-  const fetchUser = React.useCallback(async (session) => {
-  return session?.user;
-}, [])
+  const refetch = React.useCallback(async () => {
+    const supabase = createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    setUser(user);
+  }, []);
 
-  const refetchUser = React.useCallback(() => {
-    if(process.env.NEXT_PUBLIC_CREATE_ENV === "PRODUCTION") {
-      if (id) {
-        fetchUser(session).then(setUser);
-      } else {
-        setUser(null);
-      }
-    }
-  }, [fetchUser, id])
-
-  React.useEffect(refetchUser, [refetchUser]);
-
-  if (process.env.NEXT_PUBLIC_CREATE_ENV !== "PRODUCTION") {
-    return { user, data: session?.user || null, loading: status === 'loading', refetch: refetchUser };
-  }
-  return { user, data: user, loading: status === 'loading' || (status === 'authenticated' && !user), refetch: refetchUser };
+  return { user, data: user, loading, refetch };
 };
 
 export { useUser }
