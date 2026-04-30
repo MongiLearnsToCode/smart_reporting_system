@@ -4,7 +4,6 @@
 .env.local
 .env*.local
 
-# React Router
-/.react-router/
-/build/
+# Next.js
+/.next/
 .vercel
