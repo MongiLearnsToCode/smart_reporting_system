@@ -606,12 +606,6 @@ export default function CodexApp() {
         fileText = "";
       }
     }
-    const result = await upload({ file: file });
-    if (result.error) {
-      console.error("Upload error:", result.error);
-      setIsProcessing(false);
-      return;
-    }
     const rawContent = fileText
       ? "File: " + file.name + "\n\n" + fileText
       : "Uploaded file: " +
@@ -619,10 +613,16 @@ export default function CodexApp() {
         " (" +
         (file.size / 1024).toFixed(1) +
         "KB)";
+
+    if (!rawContent.trim()) {
+      setIsProcessing(false);
+      return;
+    }
+
     processMutation.mutate({
       rawContent: rawContent,
       type: "file",
-      fileUrl: result.url,
+      fileUrl: null,
     });
   }
 
