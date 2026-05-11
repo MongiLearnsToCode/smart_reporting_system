@@ -1,4 +1,5 @@
 import { createClient } from '@/utils/supabase/server';
+import { createAdminClient } from '@/utils/supabase/admin';
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function GET(request: NextRequest) {
@@ -10,10 +11,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const admin = createAdminClient();
     const { searchParams } = new URL(request.url);
     const before = searchParams.get('before');
 
-    let query = supabase
+    let query = admin
       .from('logs')
       .select('*')
       .eq('user_id', user.id)

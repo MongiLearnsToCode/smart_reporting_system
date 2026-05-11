@@ -1,4 +1,5 @@
 import { createClient } from '@/utils/supabase/server';
+import { createAdminClient } from '@/utils/supabase/admin';
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function GET(request: NextRequest) {
@@ -9,7 +10,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { data: widgets, error } = await supabase
+    const admin = createAdminClient();
+    const { data: widgets, error } = await admin
       .from('widgets')
       .select('*')
       .eq('user_id', user.id)
@@ -30,8 +32,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const admin = createAdminClient();
     const body = await request.json();
-    const { data: widget, error } = await supabase
+    const { data: widget, error } = await admin
       .from('widgets')
       .insert({ user_id: user.id, type: body.type, title: body.title, config: body.config })
       .select()

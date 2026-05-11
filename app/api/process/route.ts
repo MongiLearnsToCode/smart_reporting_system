@@ -1,4 +1,5 @@
 import { createClient } from '@/utils/supabase/server';
+import { createAdminClient } from '@/utils/supabase/admin';
 import { NextRequest, NextResponse } from 'next/server';
 
 function extractJson(text: string) {
@@ -33,6 +34,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const admin = createAdminClient();
     const { rawContent, type, fileUrl } = await request.json();
     const userId = user.id;
 
@@ -59,7 +61,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Upsert category if new
-    const { data: existingCats } = await supabase
+    const { data: existingCats } = await admin
       .from('categories')
       .select('name')
       .or(`user_id.eq.${userId},user_id.eq.system`);
@@ -69,7 +71,7 @@ export async function POST(request: NextRequest) {
     );
 
     if (!catExists) {
-      await supabase.from('categories').upsert(
+      await admin.from('categories').upsert(
         { user_id: userId, name: extracted.category, color: '#94a3b8', is_proposed: true },
         { onConflict: 'user_id,name', ignoreDuplicates: true }
       );
@@ -77,7 +79,7 @@ export async function POST(request: NextRequest) {
 
     // Conflict detection: same category logged today
     const today = new Date().toISOString().split('T')[0];
-    const { data: similarLogs } = await supabase
+    const { data: similarLogs } = await admin
       .from('logs')
       .select('id')
       .eq('user_id', userId)
@@ -90,7 +92,7 @@ export async function POST(request: NextRequest) {
     const isConflict = (similarLogs?.length ?? 0) > 0;
     const conflictSourceId = isConflict ? (similarLogs as any)[0].id : null;
 
-    const { data: savedLog, error: insertError } = await supabase
+    const { data: savedLog, error: insertError } = await admin
       .from('logs')
       .insert({
         user_id: userId,
@@ -108,7 +110,7 @@ export async function POST(request: NextRequest) {
     if (insertError) throw insertError;
 
     // Ensure a widget exists for this category
-    const { data: existingWidgets } = await supabase
+    const { data: existingWidgets } = await admin
       .from('widgets')
       .select('id')
       .eq('user_id', userId)
@@ -119,7 +121,7 @@ export async function POST(request: NextRequest) {
       if (extracted.category === 'Finance') widgetType = 'chart';
       if (extracted.category === 'Tasks') widgetType = 'list';
 
-      await supabase.from('widgets').insert({
+      await admin.from('widgets').insert({
         user_id: userId,
         type: widgetType,
         title: extracted.category,

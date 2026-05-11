@@ -1,4 +1,5 @@
 import { createClient } from '@/utils/supabase/server';
+import { createAdminClient } from '@/utils/supabase/admin';
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(request: NextRequest) {
@@ -9,6 +10,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const admin = createAdminClient();
     const { industry } = await request.json();
     const userId = user.id;
 
@@ -25,7 +27,7 @@ export async function POST(request: NextRequest) {
     }
 
     for (const p of presets) {
-      await supabase.from('widgets').upsert(
+      await admin.from('widgets').upsert(
         { user_id: userId, type: p.type, title: p.title, config: p.config },
         { onConflict: 'user_id,title', ignoreDuplicates: true }
       );

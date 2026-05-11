@@ -1,4 +1,5 @@
 import { createClient } from '@/utils/supabase/server';
+import { createAdminClient } from '@/utils/supabase/admin';
 import { NextRequest, NextResponse } from 'next/server';
 
 async function callGroq(messages: any[]) {
@@ -23,13 +24,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const admin = createAdminClient();
     const { range, template } = await request.json();
     const userId = user.id;
 
     const days = parseInt(range) || 30;
     const since = new Date(Date.now() - days * 86400000).toISOString();
 
-    const { data: logs, error } = await supabase
+    const { data: logs, error } = await admin
       .from('logs')
       .select('*')
       .eq('user_id', userId)
