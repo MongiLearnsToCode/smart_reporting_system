@@ -4,6 +4,8 @@ import { useState } from "react";
 import useAuth from "@/utils/useAuth";
 import Link from 'next/link';
 
+export const dynamic = 'force-dynamic';
+
 export default function SignInPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
