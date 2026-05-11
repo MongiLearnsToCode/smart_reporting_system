@@ -1,9 +1,0 @@
-.DS_Store
-/node_modules/
-.env
-.env.local
-.env*.local
-
-# Next.js
-/.next/
-.vercel
