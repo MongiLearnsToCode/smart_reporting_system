@@ -636,9 +636,12 @@ function SettingsModal({ settings, onSave, onClose }: {
 
   async function handleSave() {
     setSaving(true);
-    await onSave(form);
-    setSaving(false);
-    onClose();
+    try {
+      await onSave(form);
+      onClose();
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -708,15 +711,16 @@ function SettingsModal({ settings, onSave, onClose }: {
           {/* Conflicts */}
           <section className="px-6 py-5 space-y-4">
             <p className="text-[10px] font-black uppercase tracking-widest text-zinc-600">Conflict Detection</p>
-            <label className="flex items-center justify-between gap-4">
+            <div className="flex items-center justify-between gap-4">
               <span className="text-sm text-zinc-300">Enable conflict detection</span>
               <button
+                type="button"
                 onClick={() => set("conflict_detection", !form.conflict_detection)}
                 className={`relative h-6 w-11 rounded-full transition-colors ${form.conflict_detection ? "bg-emerald-500" : "bg-zinc-700"}`}
               >
                 <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${form.conflict_detection ? "translate-x-5" : "translate-x-0.5"}`} />
               </button>
-            </label>
+            </div>
             {form.conflict_detection ? (
               <label className="flex items-center justify-between gap-4">
                 <span className="text-sm text-zinc-300">Look-back window (days)</span>
@@ -884,7 +888,9 @@ export default function CodexApp() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      return res.json();
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to save settings");
+      return data;
     },
     onSuccess: function (data) {
       queryClient.setQueryData(["settings"], data);

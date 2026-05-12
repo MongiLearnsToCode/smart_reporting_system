@@ -1,5 +1,4 @@
 import { createClient } from '@/utils/supabase/server';
-import { createAdminClient } from '@/utils/supabase/admin';
 import { NextRequest, NextResponse } from 'next/server';
 
 const DEFAULTS = {
@@ -18,8 +17,7 @@ export async function GET() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const admin = createAdminClient();
-  const { data } = await admin.from('user_settings').select('*').eq('user_id', user.id).single();
+  const { data } = await supabase.from('user_settings').select('*').eq('user_id', user.id).single();
   return NextResponse.json({ settings: data ?? { ...DEFAULTS, user_id: user.id } });
 }
 
@@ -29,8 +27,7 @@ export async function PUT(request: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const body = await request.json();
-  const admin = createAdminClient();
-  const { data, error } = await admin
+  const { data, error } = await supabase
     .from('user_settings')
     .upsert({ ...body, user_id: user.id, updated_at: new Date().toISOString() }, { onConflict: 'user_id' })
     .select()
