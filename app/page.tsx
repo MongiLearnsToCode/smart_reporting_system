@@ -253,7 +253,7 @@ function ListWidget(props: any) {
 }
 
 function LogPreviewModal(props: any) {
-  const { log, onClose } = props;
+  const { log, onClose, allLogs } = props;
   if (!log) return null;
   const cat = getCat(log.category);
   const entities = log.entities || {};
@@ -366,6 +366,31 @@ function LogPreviewModal(props: any) {
             </a>
           ) : null}
         </div>
+        {log.is_conflict ? (
+          <div className="px-8 py-5 border-b border-zinc-800/60 bg-amber-500/5">
+            <div className="flex items-center gap-2 mb-2">
+              <AlertTriangle size={12} className="text-amber-400" />
+              <p className="text-[10px] font-black uppercase tracking-widest text-amber-400">
+                Why this is flagged
+              </p>
+            </div>
+            <p className="text-xs text-zinc-400 leading-relaxed">
+              Another <span className="font-bold text-zinc-300">{log.category}</span> entry was already logged earlier today. This entry may duplicate or contradict it.
+            </p>
+            {log.conflict_source_id && allLogs ? (
+              (() => {
+                const src = allLogs.find((l: any) => l.id === log.conflict_source_id);
+                return src ? (
+                  <div className="mt-3 rounded-2xl border border-amber-500/20 bg-zinc-900 px-4 py-3">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-zinc-600 mb-1">Conflicting entry</p>
+                    <p className="text-xs text-zinc-400 leading-relaxed line-clamp-3">{src.raw_content}</p>
+                    <p className="mt-1 text-[10px] text-zinc-600">{new Date(src.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</p>
+                  </div>
+                ) : null;
+              })()
+            ) : null}
+          </div>
+        ) : null}
         {items.length > 0 ? (
           <div className="px-8 py-6">
             <p className="text-[10px] font-black uppercase tracking-widest text-zinc-600 mb-4">
@@ -400,7 +425,7 @@ function LogPreviewModal(props: any) {
 }
 
 function LogFeedItem(props: any) {
-  const { log, onClick } = props;
+  const { log, onClick, allLogs } = props;
   const cat = getCat(log.category);
   const preview =
     log.raw_content && log.raw_content.length > 80
@@ -448,6 +473,17 @@ function LogFeedItem(props: any) {
       <p className="text-xs text-zinc-400 leading-relaxed group-hover:text-zinc-300 transition-colors">
         {preview}
       </p>
+      {log.is_conflict ? (
+        <p className="mt-1.5 text-[10px] text-amber-500/80 leading-relaxed">
+          ⚠ Duplicate {log.category} entry today
+          {log.conflict_source_id && allLogs ? (
+            (() => {
+              const src = allLogs.find((l: any) => l.id === log.conflict_source_id);
+              return src ? ' \u2014 conflicts with: "' + src.raw_content.slice(0, 50) + (src.raw_content.length > 50 ? '...' : '') + '"' : null;
+            })()
+          ) : null}
+        </p>
+      ) : null}
       {log.entities && log.entities.amount != null ? (
         <p className="mt-2 text-sm font-bold text-white">
           {(log.entities.currency || "$") + " "}
@@ -931,6 +967,7 @@ export default function CodexApp() {
                       <LogFeedItem
                         key={log.id}
                         log={log}
+                        allLogs={allLogs}
                         onClick={function () {
                           setPreviewLog(log);
                         }}
@@ -1101,6 +1138,7 @@ export default function CodexApp() {
         {previewLog ? (
           <LogPreviewModal
             log={previewLog}
+            allLogs={allLogs}
             onClose={function () {
               setPreviewLog(null);
             }}
