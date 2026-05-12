@@ -473,17 +473,6 @@ function LogFeedItem(props: any) {
       <p className="text-xs text-zinc-400 leading-relaxed group-hover:text-zinc-300 transition-colors">
         {preview}
       </p>
-      {log.is_conflict ? (
-        <p className="mt-1.5 text-[10px] text-amber-500/80 leading-relaxed">
-          ⚠ Duplicate {log.category} entry today
-          {log.conflict_source_id && allLogs ? (
-            (() => {
-              const src = allLogs.find((l: any) => l.id === log.conflict_source_id);
-              return src ? ' \u2014 conflicts with: "' + src.raw_content.slice(0, 50) + (src.raw_content.length > 50 ? '...' : '') + '"' : null;
-            })()
-          ) : null}
-        </p>
-      ) : null}
       {log.entities && log.entities.amount != null ? (
         <p className="mt-2 text-sm font-bold text-white">
           {(log.entities.currency || "$") + " "}
@@ -1108,6 +1097,22 @@ export default function CodexApp() {
                     <p className="text-xs text-zinc-300 leading-relaxed">
                       {log.raw_content}
                     </p>
+                    <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-3 py-2.5 space-y-1.5">
+                      <p className="text-[9px] font-black uppercase tracking-widest text-zinc-600">Why flagged</p>
+                      <p className="text-[11px] text-zinc-400 leading-relaxed">
+                        Another <span className="font-bold text-zinc-300">{log.category}</span> entry was already logged today.
+                      </p>
+                      {log.conflict_source_id ? (
+                        (() => {
+                          const src = allLogs.find((l: any) => l.id === log.conflict_source_id);
+                          return src ? (
+                            <p className="text-[11px] text-zinc-500 leading-relaxed border-t border-zinc-800 pt-1.5 mt-1">
+                              Earlier entry: &ldquo;{src.raw_content.slice(0, 80)}{src.raw_content.length > 80 ? "..." : ""}&rdquo;
+                            </p>
+                          ) : null;
+                        })()
+                      ) : null}
+                    </div>
                     <div className="flex gap-2">
                       <button
                         onClick={function () {
