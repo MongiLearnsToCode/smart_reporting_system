@@ -123,7 +123,7 @@ function MetricCard(props: any) {
     <motion.div
       layout
       onClick={onClick}
-      className="group relative flex flex-col justify-between rounded-3xl border border-zinc-800 bg-zinc-900 p-6 shadow-sm transition-all hover:border-zinc-700 hover:shadow-xl cursor-pointer h-full"
+      className="group relative flex flex-col rounded-3xl border border-zinc-800 bg-zinc-900 p-6 shadow-sm transition-all hover:border-zinc-700 hover:shadow-xl cursor-pointer"
     >
       <div className="flex items-center justify-between">
         <span className="text-sm font-medium text-zinc-400">{title}</span>
@@ -159,7 +159,7 @@ function ChartWidget(props: any) {
     <motion.div
       layout
       onClick={onClick}
-      className="group flex h-full flex-col rounded-3xl border border-zinc-800 bg-zinc-900 p-6 shadow-sm transition-all hover:border-zinc-700 hover:shadow-xl cursor-pointer"
+      className="group flex flex-col rounded-3xl border border-zinc-800 bg-zinc-900 p-6 shadow-sm transition-all hover:border-zinc-700 hover:shadow-xl cursor-pointer"
     >
       <div className="mb-4 flex items-center justify-between">
         <h3 className="text-sm font-bold text-white uppercase tracking-wider">
@@ -170,7 +170,7 @@ function ChartWidget(props: any) {
           className="opacity-0 transition-opacity group-hover:opacity-100 text-zinc-500"
         />
       </div>
-      <div className="flex-1 min-h-[120px]">
+      <div className="h-[200px]">
         <ResponsiveContainer width="100%" height="100%">
           {chartType === "line" ? (
             <LineChart data={data}>
@@ -229,7 +229,7 @@ function ListWidget(props: any) {
     <motion.div
       layout
       onClick={onClick}
-      className="group flex h-full flex-col rounded-3xl border border-zinc-800 bg-zinc-900 p-6 shadow-sm transition-all hover:border-zinc-700 hover:shadow-xl cursor-pointer"
+      className="group flex flex-col rounded-3xl border border-zinc-800 bg-zinc-900 p-6 shadow-sm transition-all hover:border-zinc-700 hover:shadow-xl cursor-pointer"
     >
       <div className="mb-4 flex items-center justify-between">
         <h3 className="text-sm font-bold text-white uppercase tracking-wider">
@@ -240,7 +240,7 @@ function ListWidget(props: any) {
           className="opacity-0 transition-opacity group-hover:opacity-100 text-zinc-500"
         />
       </div>
-      <div className="flex-1 space-y-3 overflow-y-auto">
+      <div className="max-h-[320px] space-y-3 overflow-y-auto">
         {items.map(function (item: any, i: number) {
           const dotColor = item.completed ? "bg-zinc-700" : "bg-blue-500";
           const textColor = item.completed
@@ -810,29 +810,19 @@ export default function CodexApp() {
               ).toLocaleDateString()}
             </motion.div>
           ) : null}
-          <div className="grid grid-cols-1 gap-5 md:grid-cols-12 auto-rows-[180px]">
+          <div className="columns-1 md:columns-2 xl:columns-3 gap-5 space-y-5">
             {widgets.map(function (widget: any) {
               const data = getWidgetData(
                 widget.config && widget.config.category,
                 widget.type,
               );
-              const w = (widget.config && widget.config.w) || 4;
-              const h = (widget.config && widget.config.h) || 2;
-              const gridStyle = {
-                gridColumn: "span " + w,
-                gridRow: "span " + h,
-              };
               const handleClick = function () {
                 const cat = widget.config && widget.config.category;
                 if (cat)
                   window.location.href = "/widget/" + encodeURIComponent(cat);
               };
               return (
-                <div
-                  key={widget.id}
-                  className="col-span-1 md:col-auto"
-                  style={gridStyle}
-                >
+                <div key={widget.id} className="break-inside-avoid">
                   {widget.type === "chart" ? (
                     <ChartWidget
                       title={widget.title}
@@ -860,7 +850,7 @@ export default function CodexApp() {
               );
             })}
             {widgets.length === 0 ? (
-              <div className="col-span-1 md:col-span-12 flex flex-col items-center justify-center text-zinc-700 py-16 border-2 border-dashed border-zinc-900 rounded-[36px]">
+              <div className="flex flex-col items-center justify-center text-zinc-700 py-16 border-2 border-dashed border-zinc-900 rounded-[36px]">
                 <Package size={44} strokeWidth={1} className="mb-3" />
                 <p className="text-sm font-medium">
                   Log something to seed your canvas
