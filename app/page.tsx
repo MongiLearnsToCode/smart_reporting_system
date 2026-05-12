@@ -914,7 +914,7 @@ export default function CodexApp() {
               {allLogs.length > 0 ? (
                 <div
                   className="flex gap-1.5 overflow-x-auto px-5 py-3 border-b border-zinc-900"
-                  style={{ scrollbarWidth: "none" }}
+
                 >
                   {uniqueCategories.map(function (cat) {
                     const c = getCat(cat);
