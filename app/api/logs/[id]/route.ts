@@ -16,6 +16,16 @@ export async function DELETE(
     }
 
     const admin = createAdminClient();
+
+    const { data: log, error: fetchError } = await admin
+      .from('logs')
+      .select('category, raw_content')
+      .eq('id', id)
+      .eq('user_id', user.id)
+      .single();
+
+    if (fetchError) throw fetchError;
+
     const { error } = await admin
       .from('logs')
       .delete()
@@ -23,6 +33,17 @@ export async function DELETE(
       .eq('user_id', user.id);
 
     if (error) throw error;
+
+    await admin.from('logs').insert({
+      user_id: user.id,
+      category: log.category,
+      type: 'text',
+      raw_content: `Reverted conflict: "${log.raw_content?.slice(0, 120)}${log.raw_content?.length > 120 ? '…' : ''}"`,
+      entities: {},
+      is_conflict: false,
+      timestamp: new Date().toISOString(),
+    });
+
     return NextResponse.json({ success: true });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
