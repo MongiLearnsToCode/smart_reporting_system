@@ -253,19 +253,27 @@ function ListWidget(props: any) {
   );
 }
 
-function FilePreviewModal({ file, onClose }: { file: File; onClose: () => void }) {
-  const url = useRef(URL.createObjectURL(file));
-  useEffect(() => () => URL.revokeObjectURL(url.current), []);
+function FilePreviewModal({ file, fileUrl, fileName, onClose }: {
+  file?: File;
+  fileUrl?: string;
+  fileName?: string;
+  onClose: () => void;
+}) {
+  const blobUrl = useRef(file ? URL.createObjectURL(file) : null);
+  useEffect(() => () => { if (blobUrl.current) URL.revokeObjectURL(blobUrl.current); }, []);
 
-  const ext = file.name.split(".").pop()?.toLowerCase();
+  const url = blobUrl.current ?? fileUrl ?? "";
+  const name = file?.name ?? fileName ?? "";
+  const ext = name.split(".").pop()?.toLowerCase();
   const isPdf = ext === "pdf";
   const isImage = ["png", "jpg", "jpeg", "gif", "webp", "svg"].includes(ext || "");
   const isText = ["txt", "csv", "md"].includes(ext || "");
   const [textContent, setTextContent] = useState<string | null>(null);
 
   useEffect(() => {
-    if (isText) file.text().then(setTextContent);
-  }, [file, isText]);
+    if (isText && file) file.text().then(setTextContent);
+    else if (isText && url) fetch(url).then(r => r.text()).then(setTextContent);
+  }, [file, isText, url]);
 
   return (
     <motion.div
@@ -285,13 +293,13 @@ function FilePreviewModal({ file, onClose }: { file: File; onClose: () => void }
         <div className="flex items-center justify-between px-5 py-3 border-b border-zinc-800 shrink-0">
           <div className="flex items-center gap-2 min-w-0">
             <FileText size={14} className="text-zinc-400 shrink-0" />
-            <span className="text-sm font-bold text-white truncate">{file.name}</span>
-            <span className="text-xs text-zinc-600 shrink-0">({(file.size / 1024).toFixed(1)} KB)</span>
+            <span className="text-sm font-bold text-white truncate">{name}</span>
+            {file ? <span className="text-xs text-zinc-600 shrink-0">({(file.size / 1024).toFixed(1)} KB)</span> : null}
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <a
-              href={url.current}
-              download={file.name}
+              href={url}
+              download={name}
               className="flex items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-xs font-bold text-zinc-400 hover:text-white transition-colors"
             >
               <Download size={12} /> Download
@@ -303,12 +311,12 @@ function FilePreviewModal({ file, onClose }: { file: File; onClose: () => void }
         </div>
         <div className="flex-1 overflow-auto min-h-0">
           {isPdf && (
-            <iframe src={url.current} className="w-full h-full min-h-[70vh]" title={file.name} />
+            <iframe src={url} className="w-full h-full min-h-[70vh]" title={name} />
           )}
           {isImage && (
             <div className="flex items-center justify-center p-4 h-full">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={url.current} alt={file.name} className="max-w-full max-h-[75vh] object-contain rounded-lg" />
+              <img src={url} alt={name} className="max-w-full max-h-[75vh] object-contain rounded-lg" />
             </div>
           )}
           {isText && (
@@ -321,8 +329,8 @@ function FilePreviewModal({ file, onClose }: { file: File; onClose: () => void }
               <FileText size={48} strokeWidth={1} />
               <p className="text-sm font-medium">Preview not available for .{ext} files</p>
               <a
-                href={url.current}
-                download={file.name}
+                href={url}
+                download={name}
                 className="flex items-center gap-2 rounded-xl bg-zinc-800 px-5 py-2.5 text-sm font-bold text-white hover:bg-zinc-700 transition-colors"
               >
                 <Download size={14} /> Download to open
@@ -337,6 +345,7 @@ function FilePreviewModal({ file, onClose }: { file: File; onClose: () => void }
 
 function LogPreviewModal(props: any) {
   const { log, onClose, allLogs } = props;
+  const [showAttachment, setShowAttachment] = useState(false);
   if (!log) return null;
   const cat = getCat(log.category);
   const entities = log.entities || {};
@@ -371,6 +380,7 @@ function LogPreviewModal(props: any) {
     items.push({ icon: Tag, label: "Tags", value: entities.tags.join(", ") });
 
   return (
+    <>
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
@@ -439,14 +449,12 @@ function LogPreviewModal(props: any) {
             {log.raw_content}
           </p>
           {log.file_url ? (
-            <a
-              href={log.file_url}
-              target="_blank"
-              rel="noopener noreferrer"
+            <button
+              onClick={function () { setShowAttachment(true); }}
               className="mt-3 inline-flex items-center gap-2 text-[11px] font-bold text-blue-400 hover:text-blue-300 transition-colors"
             >
               <FileText size={12} /> View attached file
-            </a>
+            </button>
           ) : null}
         </div>
         {log.is_conflict ? (
@@ -506,6 +514,16 @@ function LogPreviewModal(props: any) {
         ) : null}
       </motion.div>
     </motion.div>
+    <AnimatePresence>
+      {showAttachment && log.file_url ? (
+        <FilePreviewModal
+          fileUrl={log.file_url}
+          fileName={log.raw_content.match(/^(?:File|Uploaded file): ([^\n(]+)/)?.[1]?.trim() ?? "attachment"}
+          onClose={() => setShowAttachment(false)}
+        />
+      ) : null}
+    </AnimatePresence>
+    </>
   );
 }
 
@@ -604,7 +622,7 @@ export default function CodexApp() {
   const user = userResult.data as import("@supabase/supabase-js").User | null;
   const userLoading = userResult.loading;
   const uploadHook = useUpload();
-  const upload = uploadHook[0];
+  const upload = uploadHook[0] as (input: { file: File }) => Promise<{ url: string; mimeType: string | null } | { error: string }>;
 
   const [inputText, setInputText] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
@@ -731,10 +749,13 @@ export default function CodexApp() {
       return;
     }
 
+    const uploadResult = await upload({ file });
+    const fileUrl = uploadResult && !("error" in uploadResult) ? uploadResult.url : null;
+
     processMutation.mutate({
       rawContent: rawContent,
       type: "file",
-      fileUrl: null,
+      fileUrl,
     });
   }
 
