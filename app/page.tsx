@@ -253,6 +253,88 @@ function ListWidget(props: any) {
   );
 }
 
+function FilePreviewModal({ file, onClose }: { file: File; onClose: () => void }) {
+  const url = useRef(URL.createObjectURL(file));
+  useEffect(() => () => URL.revokeObjectURL(url.current), []);
+
+  const ext = file.name.split(".").pop()?.toLowerCase();
+  const isPdf = ext === "pdf";
+  const isImage = ["png", "jpg", "jpeg", "gif", "webp", "svg"].includes(ext || "");
+  const isText = ["txt", "csv", "md"].includes(ext || "");
+  const [textContent, setTextContent] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isText) file.text().then(setTextContent);
+  }, [file, isText]);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ scale: 0.95, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.95, opacity: 0 }}
+        onClick={(e) => e.stopPropagation()}
+        className="relative flex flex-col w-full max-w-4xl max-h-[90vh] rounded-2xl border border-zinc-800 bg-zinc-950 overflow-hidden shadow-2xl"
+      >
+        <div className="flex items-center justify-between px-5 py-3 border-b border-zinc-800 shrink-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <FileText size={14} className="text-zinc-400 shrink-0" />
+            <span className="text-sm font-bold text-white truncate">{file.name}</span>
+            <span className="text-xs text-zinc-600 shrink-0">({(file.size / 1024).toFixed(1)} KB)</span>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <a
+              href={url.current}
+              download={file.name}
+              className="flex items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-xs font-bold text-zinc-400 hover:text-white transition-colors"
+            >
+              <Download size={12} /> Download
+            </a>
+            <button onClick={onClose} className="text-zinc-500 hover:text-white transition-colors">
+              <X size={18} />
+            </button>
+          </div>
+        </div>
+        <div className="flex-1 overflow-auto min-h-0">
+          {isPdf && (
+            <iframe src={url.current} className="w-full h-full min-h-[70vh]" title={file.name} />
+          )}
+          {isImage && (
+            <div className="flex items-center justify-center p-4 h-full">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={url.current} alt={file.name} className="max-w-full max-h-[75vh] object-contain rounded-lg" />
+            </div>
+          )}
+          {isText && (
+            <pre className="p-5 text-xs text-zinc-300 whitespace-pre-wrap font-mono leading-relaxed">
+              {textContent ?? "Loading..."}
+            </pre>
+          )}
+          {!isPdf && !isImage && !isText && (
+            <div className="flex flex-col items-center justify-center gap-4 py-20 text-zinc-500">
+              <FileText size={48} strokeWidth={1} />
+              <p className="text-sm font-medium">Preview not available for .{ext} files</p>
+              <a
+                href={url.current}
+                download={file.name}
+                className="flex items-center gap-2 rounded-xl bg-zinc-800 px-5 py-2.5 text-sm font-bold text-white hover:bg-zinc-700 transition-colors"
+              >
+                <Download size={14} /> Download to open
+              </a>
+            </div>
+          )}
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
 function LogPreviewModal(props: any) {
   const { log, onClose, allLogs } = props;
   if (!log) return null;
@@ -532,7 +614,20 @@ export default function CodexApp() {
   const [showConflicts, setShowConflicts] = useState(false);
   const [isLogFeedPinned, setIsLogFeedPinned] = useState(true);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [previewFile, setPreviewFile] = useState<File | null>(null);
+  const [showFilePreview, setShowFilePreview] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(function () {
+    function handleClick(e: MouseEvent) {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+        setShowUserMenu(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return function () { document.removeEventListener("mousedown", handleClick); };
+  }, []);
 
   useEffect(
     function () {
@@ -608,6 +703,7 @@ export default function CodexApp() {
     const file = e.target.files && e.target.files[0];
     if (!file) return;
     e.target.value = "";
+    setPreviewFile(file);
     setIsProcessing(true);
     let fileText = "";
     const isTextBased =
@@ -758,7 +854,7 @@ export default function CodexApp() {
           <button className="hidden sm:flex items-center gap-2 rounded-full border border-zinc-800 bg-zinc-900 px-4 py-1.5 text-xs font-bold transition-all hover:bg-zinc-800">
             <Download size={13} /> Export PDF
           </button>
-          <div className="relative">
+          <div className="relative" ref={userMenuRef}>
             <button
               onClick={function () { setShowUserMenu(function (v) { return !v; }); }}
               className="h-8 w-8 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center overflow-hidden hover:border-zinc-500 transition-colors"
@@ -1036,6 +1132,26 @@ export default function CodexApp() {
             ) : null}
           </AnimatePresence>
 
+          {previewFile ? (
+            <div className="flex items-center gap-2 self-start rounded-full border border-zinc-800 bg-zinc-900 px-3 py-1.5">
+              <FileText size={12} className="text-zinc-400" />
+              <button
+                type="button"
+                onClick={() => setShowFilePreview(true)}
+                className="text-xs font-bold text-zinc-300 hover:text-white transition-colors max-w-[200px] truncate"
+              >
+                {previewFile.name}
+              </button>
+              <button
+                type="button"
+                onClick={() => setPreviewFile(null)}
+                className="text-zinc-600 hover:text-white transition-colors"
+              >
+                <X size={12} />
+              </button>
+            </div>
+          ) : null}
+
           <form
             onSubmit={handleSubmit}
             className="group relative flex w-full flex-col overflow-hidden rounded-[28px] border border-zinc-800 bg-zinc-950/95 shadow-2xl backdrop-blur-xl transition-all focus-within:border-zinc-700 focus-within:ring-4 focus-within:ring-white/5"
@@ -1182,6 +1298,12 @@ export default function CodexApp() {
               setPreviewLog(null);
             }}
           />
+        ) : null}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showFilePreview && previewFile ? (
+          <FilePreviewModal file={previewFile} onClose={() => setShowFilePreview(false)} />
         ) : null}
       </AnimatePresence>
     </div>
