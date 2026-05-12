@@ -30,6 +30,7 @@ import {
   PinOff,
   LogOut,
   ArrowUpDown,
+  Settings,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -617,6 +618,189 @@ function LogFeedItem(props: any) {
   );
 }
 
+const CURRENCIES = ["USD","EUR","GBP","ZAR","JPY","CAD","AUD","CHF","CNY","INR","BRL","MXN","NGN","KES","GHS"];
+const TIMEZONES = ["UTC","Africa/Johannesburg","Africa/Lagos","Africa/Nairobi","America/New_York","America/Chicago","America/Denver","America/Los_Angeles","America/Sao_Paulo","Europe/London","Europe/Paris","Europe/Berlin","Asia/Dubai","Asia/Kolkata","Asia/Singapore","Asia/Tokyo","Australia/Sydney"];
+const LANGUAGES = ["English","French","Spanish","Portuguese","German","Swahili","Zulu","Afrikaans","Arabic","Chinese","Hindi","Japanese"];
+
+function SettingsModal({ settings, onSave, onClose }: {
+  settings: any;
+  onSave: (s: any) => void;
+  onClose: () => void;
+}) {
+  const [form, setForm] = useState({ ...settings });
+  const [saving, setSaving] = useState(false);
+
+  function set(key: string, value: any) {
+    setForm((f: any) => ({ ...f, [key]: value }));
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    await onSave(form);
+    setSaving(false);
+    onClose();
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[80] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ scale: 0.95, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.95, opacity: 0 }}
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-lg rounded-2xl border border-zinc-800 bg-zinc-950 shadow-2xl overflow-hidden"
+      >
+        <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800">
+          <div className="flex items-center gap-2">
+            <Settings size={15} className="text-zinc-400" />
+            <span className="text-sm font-black uppercase tracking-widest text-white">Settings</span>
+          </div>
+          <button onClick={onClose} className="text-zinc-500 hover:text-white transition-colors"><X size={16} /></button>
+        </div>
+
+        <div className="overflow-y-auto max-h-[70vh] divide-y divide-zinc-800/60">
+          {/* Currency & Finance */}
+          <section className="px-6 py-5 space-y-4">
+            <p className="text-[10px] font-black uppercase tracking-widest text-zinc-600">Currency & Finance</p>
+            <label className="flex items-center justify-between gap-4">
+              <span className="text-sm text-zinc-300">Default currency</span>
+              <select
+                value={form.currency}
+                onChange={(e) => set("currency", e.target.value)}
+                className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-white outline-none focus:border-zinc-500"
+              >
+                {CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </label>
+          </section>
+
+          {/* AI Behaviour */}
+          <section className="px-6 py-5 space-y-4">
+            <p className="text-[10px] font-black uppercase tracking-widest text-zinc-600">AI Behaviour</p>
+            <label className="flex items-center justify-between gap-4">
+              <span className="text-sm text-zinc-300">Timezone</span>
+              <select
+                value={form.timezone}
+                onChange={(e) => set("timezone", e.target.value)}
+                className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-white outline-none focus:border-zinc-500 max-w-[200px]"
+              >
+                {TIMEZONES.map((tz) => <option key={tz} value={tz}>{tz}</option>)}
+              </select>
+            </label>
+            <label className="flex items-center justify-between gap-4">
+              <span className="text-sm text-zinc-300">Summary language</span>
+              <select
+                value={form.ai_language}
+                onChange={(e) => set("ai_language", e.target.value)}
+                className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-white outline-none focus:border-zinc-500"
+              >
+                {LANGUAGES.map((l) => <option key={l} value={l}>{l}</option>)}
+              </select>
+            </label>
+          </section>
+
+          {/* Conflicts */}
+          <section className="px-6 py-5 space-y-4">
+            <p className="text-[10px] font-black uppercase tracking-widest text-zinc-600">Conflict Detection</p>
+            <label className="flex items-center justify-between gap-4">
+              <span className="text-sm text-zinc-300">Enable conflict detection</span>
+              <button
+                onClick={() => set("conflict_detection", !form.conflict_detection)}
+                className={`relative h-6 w-11 rounded-full transition-colors ${form.conflict_detection ? "bg-emerald-500" : "bg-zinc-700"}`}
+              >
+                <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${form.conflict_detection ? "translate-x-5" : "translate-x-0.5"}`} />
+              </button>
+            </label>
+            {form.conflict_detection ? (
+              <label className="flex items-center justify-between gap-4">
+                <span className="text-sm text-zinc-300">Look-back window (days)</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={90}
+                  value={form.conflict_dismiss_days}
+                  onChange={(e) => set("conflict_dismiss_days", parseInt(e.target.value) || 1)}
+                  className="w-20 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-white outline-none focus:border-zinc-500 text-right"
+                />
+              </label>
+            ) : null}
+          </section>
+
+          {/* Canvas */}
+          <section className="px-6 py-5 space-y-4">
+            <p className="text-[10px] font-black uppercase tracking-widest text-zinc-600">Canvas</p>
+            <label className="flex items-center justify-between gap-4">
+              <span className="text-sm text-zinc-300">Default widget sort</span>
+              <select
+                value={form.default_widget_sort}
+                onChange={(e) => set("default_widget_sort", e.target.value)}
+                className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-white outline-none focus:border-zinc-500"
+              >
+                <option value="title">A–Z</option>
+                <option value="created">Created</option>
+                <option value="recent">Recent activity</option>
+              </select>
+            </label>
+            <label className="flex items-center justify-between gap-4">
+              <span className="text-sm text-zinc-300">Canvas density</span>
+              <select
+                value={form.canvas_density}
+                onChange={(e) => set("canvas_density", e.target.value)}
+                className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-white outline-none focus:border-zinc-500"
+              >
+                <option value="comfortable">Comfortable</option>
+                <option value="compact">Compact</option>
+              </select>
+            </label>
+          </section>
+
+          {/* Data */}
+          <section className="px-6 py-5 space-y-4">
+            <p className="text-[10px] font-black uppercase tracking-widest text-zinc-600">Data</p>
+            <label className="flex items-center justify-between gap-4">
+              <div>
+                <span className="text-sm text-zinc-300">Data retention</span>
+                <p className="text-xs text-zinc-600 mt-0.5">Logs older than this are hidden from the canvas</p>
+              </div>
+              <select
+                value={form.data_retention_days}
+                onChange={(e) => set("data_retention_days", parseInt(e.target.value))}
+                className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-white outline-none focus:border-zinc-500"
+              >
+                <option value={30}>30 days</option>
+                <option value={60}>60 days</option>
+                <option value={90}>90 days</option>
+                <option value={180}>180 days</option>
+                <option value={365}>1 year</option>
+                <option value={9999}>Forever</option>
+              </select>
+            </label>
+          </section>
+        </div>
+
+        <div className="px-6 py-4 border-t border-zinc-800 flex justify-end gap-3">
+          <button onClick={onClose} className="rounded-xl border border-zinc-800 px-4 py-2 text-sm font-bold text-zinc-400 hover:text-white transition-colors">
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="rounded-xl bg-white px-5 py-2 text-sm font-black text-black hover:bg-zinc-200 transition-colors disabled:opacity-50"
+          >
+            {saving ? "Saving…" : "Save"}
+          </button>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
 export default function CodexApp() {
   const queryClient = useQueryClient();
   const userResult = useUser();
@@ -636,6 +820,7 @@ export default function CodexApp() {
   const [previewFile, setPreviewFile] = useState<File | null>(null);
   const [showFilePreview, setShowFilePreview] = useState(false);
   const [widgetSort, setWidgetSort] = useState<"title" | "created" | "recent">("title");
+  const [showSettings, setShowSettings] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -683,6 +868,32 @@ export default function CodexApp() {
     },
   });
 
+  const settingsQuery = useQuery({
+    queryKey: ["settings"],
+    enabled: !!user,
+    queryFn: async function () {
+      const res = await fetch("/api/settings");
+      return res.json();
+    },
+  });
+
+  const settingsMutation = useMutation({
+    mutationFn: async function (payload: any) {
+      const res = await fetch("/api/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      return res.json();
+    },
+    onSuccess: function (data) {
+      queryClient.setQueryData(["settings"], data);
+      if (data.settings?.default_widget_sort) {
+        setWidgetSort(data.settings.default_widget_sort);
+      }
+    },
+  });
+
   const processMutation = useMutation({
     mutationFn: async function (payload: any) {
       const res = await fetch("/api/process", {
@@ -711,6 +922,15 @@ export default function CodexApp() {
 
   const logsData = logsQuery.data;
   const widgetsData = widgetsQuery.data;
+  const userSettings = (settingsQuery.data && settingsQuery.data.settings) || {};
+
+  // Apply saved default sort on first load
+  useEffect(function () {
+    if (userSettings.default_widget_sort) {
+      setWidgetSort(userSettings.default_widget_sort);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settingsQuery.dataUpdatedAt]);
 
   async function handleSubmit(e?: any) {
     if (e && e.preventDefault) e.preventDefault();
@@ -914,6 +1134,15 @@ export default function CodexApp() {
                     <p className="text-xs text-zinc-500 truncate">{user?.email}</p>
                   </div>
                   <button
+                    onClick={function () {
+                      setShowUserMenu(false);
+                      setShowSettings(true);
+                    }}
+                    className="flex w-full items-center gap-2.5 px-4 py-3 text-sm text-zinc-400 hover:bg-zinc-900 hover:text-white transition-colors"
+                  >
+                    <Settings size={14} /> Settings
+                  </button>
+                  <button
                     onClick={async function () {
                       const { createClient } = await import("@/utils/supabase/client");
                       await createClient().auth.signOut();
@@ -981,7 +1210,7 @@ export default function CodexApp() {
               ).toLocaleDateString()}
             </motion.div>
           ) : null}
-          <div className="columns-1 md:columns-2 xl:columns-3 gap-5 space-y-5">
+          <div className={`columns-1 md:columns-2 xl:columns-3 ${userSettings.canvas_density === "compact" ? "gap-3 space-y-3" : "gap-5 space-y-5"}`}>
             {widgets.length > 0 ? (
               <div className="break-inside-avoid mb-1 flex items-center justify-end">
                 <div className="flex items-center gap-1.5 rounded-full border border-zinc-800 bg-zinc-900 p-1">
@@ -1358,6 +1587,26 @@ export default function CodexApp() {
       <AnimatePresence>
         {showFilePreview && previewFile ? (
           <FilePreviewModal file={previewFile} onClose={() => setShowFilePreview(false)} />
+        ) : null}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showSettings ? (
+          <SettingsModal
+            settings={{
+              currency: "USD",
+              timezone: "UTC",
+              ai_language: "English",
+              conflict_detection: true,
+              conflict_dismiss_days: 7,
+              default_widget_sort: "title",
+              canvas_density: "comfortable",
+              data_retention_days: 90,
+              ...userSettings,
+            }}
+            onSave={async (s: any) => { await settingsMutation.mutateAsync(s); }}
+            onClose={() => setShowSettings(false)}
+          />
         ) : null}
       </AnimatePresence>
     </div>

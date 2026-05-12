@@ -51,3 +51,23 @@ alter table public.widgets enable row level security;
 create policy "Users can manage their own widgets"
   on public.widgets for all
   using (auth.uid() = user_id);
+
+-- User Settings
+create table if not exists public.user_settings (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  currency text not null default 'USD',
+  timezone text not null default 'UTC',
+  ai_language text not null default 'English',
+  conflict_detection boolean not null default true,
+  conflict_dismiss_days integer not null default 7,
+  default_widget_sort text not null default 'title',
+  canvas_density text not null default 'comfortable',
+  data_retention_days integer not null default 90,
+  updated_at timestamptz not null default now()
+);
+
+alter table public.user_settings enable row level security;
+
+create policy "Users can manage their own settings"
+  on public.user_settings for all
+  using (auth.uid() = user_id);

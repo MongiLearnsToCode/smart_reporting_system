@@ -38,12 +38,23 @@ export async function POST(request: NextRequest) {
     const { rawContent, type, fileUrl } = await request.json();
     const userId = user.id;
 
+    // Load user settings
+    const { data: settingsRow } = await admin.from('user_settings').select('*').eq('user_id', userId).single();
+    const settings = settingsRow ?? {};
+    const currency = settings.currency ?? 'USD';
+    const timezone = settings.timezone ?? 'UTC';
+    const aiLanguage = settings.ai_language ?? 'English';
+    const conflictDetection = settings.conflict_detection !== false;
+    const conflictDismissDays = settings.conflict_dismiss_days ?? 7;
+
     const systemPrompt = [
       'You are an AI data extractor for Codex, a business intelligence platform.',
       'Extract structured data from the user log entry and return ONLY valid JSON with no markdown, no code blocks, and no explanation.',
       'Choose from these categories: Finance, Inventory, Projects, Clients, Tasks, Team, Marketing.',
       'If none fit, propose a short new category name.',
-      'Today\'s date for resolving relative dates: ' + new Date().toISOString(),
+      `Today's date for resolving relative dates: ${new Date().toLocaleString('en-US', { timeZone: timezone })} (timezone: ${timezone})`,
+      `Default currency: ${currency}. Use this when no currency is specified.`,
+      `Write the summary in ${aiLanguage}.`,
       'Detect sentiment as: positive, neutral, or negative.',
       'Detect urgency as: low, medium, or high.',
       'Return this exact JSON structure:',
@@ -77,23 +88,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Conflict detection: fetch today's logs in same category, then ask AI to compare content
-    const today = new Date().toISOString().split('T')[0];
-    const { data: todayLogs } = await admin
+    // Conflict detection: fetch recent logs in same category, then ask AI to compare content
+    const windowStart = new Date(Date.now() - conflictDismissDays * 86400000).toISOString();
+    const { data: recentLogs } = conflictDetection ? await admin
       .from('logs')
       .select('id, raw_content')
       .eq('user_id', userId)
       .eq('category', extracted.category)
-      .gte('timestamp', today)
+      .gte('timestamp', windowStart)
       .order('timestamp', { ascending: false })
-      .limit(5);
+      .limit(5) : { data: null };
 
     let isConflict = false;
     let conflictSourceId: string | null = null;
     let conflictReason: string | null = null;
 
-    if (todayLogs && todayLogs.length > 0) {
-      const comparisons = todayLogs.map((l: any, i: number) => `[${i + 1}] ${l.raw_content}`).join('\n\n');
+    if (conflictDetection && recentLogs && recentLogs.length > 0) {
+      const comparisons = recentLogs.map((l: any, i: number) => `[${i + 1}] ${l.raw_content}`).join('\n\n');
       const similarityPrompt = `You are a duplicate-detection assistant. Compare the NEW entry against each EXISTING entry and return ONLY valid JSON.
 
 NEW ENTRY:
@@ -114,7 +125,7 @@ Return: { "duplicate": boolean, "source_index": number | null, "reason": string 
 
       if (similarity.duplicate && similarity.source_index != null) {
         isConflict = true;
-        conflictSourceId = (todayLogs as any)[similarity.source_index - 1].id;
+        conflictSourceId = (recentLogs as any)[similarity.source_index - 1].id;
         conflictReason = similarity.reason ?? null;
       }
     }
