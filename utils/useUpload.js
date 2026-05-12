@@ -9,7 +9,7 @@ function useUpload() {
       if ("file" in input && input.file) {
         const formData = new FormData();
         formData.append("file", input.file);
-        response = await fetch("/_create/api/upload/", {
+        response = await fetch("/api/upload", {
           method: "POST",
           body: formData
         });
