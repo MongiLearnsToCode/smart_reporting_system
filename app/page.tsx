@@ -519,7 +519,7 @@ function LogFeedItem(props: any) {
 export default function CodexApp() {
   const queryClient = useQueryClient();
   const userResult = useUser();
-  const user = userResult.data;
+  const user = userResult.data as import("@supabase/supabase-js").User | null;
   const userLoading = userResult.loading;
   const uploadHook = useUpload();
   const upload = uploadHook[0];

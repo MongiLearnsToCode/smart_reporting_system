@@ -316,7 +316,7 @@ export default function WidgetDetailPage({ params }: { params: Promise<{ categor
         return (l.entities && l.entities.tags) || [];
       }),
     ),
-  ).slice(0, 12);
+  ).slice(0, 12) as string[];
 
   // All unique people/orgs
   const allPeople = Array.from(
@@ -325,7 +325,7 @@ export default function WidgetDetailPage({ params }: { params: Promise<{ categor
         return (l.entities && l.entities.names) || [];
       }),
     ),
-  ).slice(0, 10);
+  ).slice(0, 10) as string[];
 
   if (userLoading || !user) {
     return (
