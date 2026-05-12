@@ -26,6 +26,8 @@ import {
   Zap,
   ChevronRight,
   ScrollText,
+  Pin,
+  PinOff,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -516,6 +518,7 @@ export default function CodexApp() {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [previewLog, setPreviewLog] = useState<any>(null);
   const [showConflicts, setShowConflicts] = useState(false);
+  const [isLogFeedPinned, setIsLogFeedPinned] = useState(true);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(
@@ -717,6 +720,17 @@ export default function CodexApp() {
           </div>
         </div>
         <div className="flex items-center gap-3">
+          {!isLogFeedPinned && (
+            <button
+              onClick={function () {
+                setIsLogFeedPinned(true);
+              }}
+              className="flex h-8 items-center gap-2 rounded-full border border-zinc-800 bg-zinc-900 px-3 text-xs font-bold text-zinc-400 hover:text-white transition-all"
+            >
+              <ScrollText size={14} />
+              <span className="hidden md:inline">Log Feed</span>
+            </button>
+          )}
           <button
             onClick={function () {
               setShowConflicts(true);
@@ -856,87 +870,107 @@ export default function CodexApp() {
           </div>
         </main>
 
-        <aside className="hidden xl:flex w-80 shrink-0 flex-col border-l border-zinc-900 overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-900">
-            <div className="flex items-center gap-2">
-              <ScrollText size={14} className="text-zinc-500" />
-              <span className="text-xs font-black uppercase tracking-widest text-zinc-400">
-                Log Feed
-              </span>
-              <span className="rounded-full bg-zinc-800 px-2 py-0.5 text-[10px] font-bold text-zinc-500">
-                {allLogs.length}
-              </span>
-            </div>
-            {selectedCategory ? (
-              <button
-                onClick={function () {
-                  setSelectedCategory(null);
-                }}
-                className="flex items-center gap-1 text-[10px] font-bold text-zinc-500 hover:text-white transition-colors"
-              >
-                <X size={10} /> Clear filter
-              </button>
-            ) : null}
-          </div>
-
-          {allLogs.length > 0 ? (
-            <div
-              className="flex gap-1.5 overflow-x-auto px-5 py-3 border-b border-zinc-900"
-              style={{ scrollbarWidth: "none" }}
+        <AnimatePresence>
+          {isLogFeedPinned && (
+            <motion.aside
+              initial={{ width: 0, opacity: 0 }}
+              animate={{ width: 320, opacity: 1 }}
+              exit={{ width: 0, opacity: 0 }}
+              className="hidden xl:flex shrink-0 flex-col border-l border-zinc-900 overflow-hidden"
             >
-              {uniqueCategories.map(function (cat) {
-                const c = getCat(cat);
-                const active = selectedCategory === cat;
-                const cls = active
-                  ? c.bg + " " + c.text + " " + c.border
-                  : "border-zinc-800 text-zinc-600 hover:border-zinc-700 hover:text-zinc-400";
-                return (
+              <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-900">
+                <div className="flex items-center gap-2">
+                  <ScrollText size={14} className="text-zinc-500" />
+                  <span className="text-xs font-black uppercase tracking-widest text-zinc-400">
+                    Log Feed
+                  </span>
+                  <span className="rounded-full bg-zinc-800 px-2 py-0.5 text-[10px] font-bold text-zinc-500">
+                    {allLogs.length}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {selectedCategory ? (
+                    <button
+                      onClick={function () {
+                        setSelectedCategory(null);
+                      }}
+                      className="flex items-center gap-1 text-[10px] font-bold text-zinc-500 hover:text-white transition-colors"
+                    >
+                      <X size={10} /> Clear filter
+                    </button>
+                  ) : null}
                   <button
-                    key={cat}
                     onClick={function () {
-                      setSelectedCategory(active ? null : cat);
+                      setIsLogFeedPinned(false);
                     }}
-                    className={
-                      "shrink-0 rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-widest transition-all border " +
-                      cls
-                    }
+                    className="text-zinc-500 hover:text-white transition-colors"
+                    title="Unpin Log Feed"
                   >
-                    {cat}
+                    <PinOff size={14} />
                   </button>
-                );
-              })}
-            </div>
-          ) : null}
-
-          <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2 pb-36">
-            {filteredLogs.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-16 text-zinc-700">
-                <MessageSquare size={32} strokeWidth={1} className="mb-3" />
-                <p className="text-xs font-medium text-center">
-                  {selectedCategory
-                    ? "No logs for " + selectedCategory
-                    : "No logs yet. Start by typing below."}
-                </p>
+                </div>
               </div>
-            ) : null}
-            <AnimatePresence initial={false}>
-              {filteredLogs.map(function (log: any) {
-                return (
-                  <LogFeedItem
-                    key={log.id}
-                    log={log}
-                    onClick={function () {
-                      setPreviewLog(log);
-                    }}
-                  />
-                );
-              })}
-            </AnimatePresence>
-          </div>
-        </aside>
+
+              {allLogs.length > 0 ? (
+                <div
+                  className="flex gap-1.5 overflow-x-auto px-5 py-3 border-b border-zinc-900"
+                  style={{ scrollbarWidth: "none" }}
+                >
+                  {uniqueCategories.map(function (cat) {
+                    const c = getCat(cat);
+                    const active = selectedCategory === cat;
+                    const cls = active
+                      ? c.bg + " " + c.text + " " + c.border
+                      : "border-zinc-800 text-zinc-600 hover:border-zinc-700 hover:text-zinc-400";
+                    return (
+                      <button
+                        key={cat}
+                        onClick={function () {
+                          setSelectedCategory(active ? null : cat);
+                        }}
+                        className={
+                          "shrink-0 rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-widest transition-all border " +
+                          cls
+                        }
+                      >
+                        {cat}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
+
+              <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2 pb-36">
+                {filteredLogs.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-16 text-zinc-700">
+                    <MessageSquare size={32} strokeWidth={1} className="mb-3" />
+                    <p className="text-xs font-medium text-center">
+                      {selectedCategory
+                        ? "No logs for " + selectedCategory
+                        : "No logs yet. Start by typing below."}
+                    </p>
+                  </div>
+                ) : null}
+                <AnimatePresence initial={false}>
+                  {filteredLogs.map(function (log: any) {
+                    return (
+                      <LogFeedItem
+                        key={log.id}
+                        log={log}
+                        onClick={function () {
+                          setPreviewLog(log);
+                        }}
+                      />
+                    );
+                  })}
+                </AnimatePresence>
+              </div>
+            </motion.aside>
+          )}
+        </AnimatePresence>
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 z-30 flex justify-center p-5 pointer-events-none lg:left-16 xl:right-80">
+      <div className={`fixed bottom-0 left-0 right-0 z-30 flex justify-center p-5 pointer-events-none lg:left-16 transition-all duration-300 ${isLogFeedPinned ? "xl:right-80" : "xl:right-0"}`}>
         <div className="pointer-events-auto flex w-full max-w-2xl flex-col items-center gap-3">
           <AnimatePresence>
             {isProcessing ? (
