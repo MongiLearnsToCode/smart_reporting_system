@@ -123,30 +123,28 @@ function MetricCard(props: any) {
     <motion.div
       layout
       onClick={onClick}
-      className="group relative flex flex-col rounded-3xl border border-zinc-800 bg-zinc-900 p-6 shadow-sm transition-all hover:border-zinc-700 hover:shadow-xl cursor-pointer"
+      className="group relative flex items-center justify-between rounded-3xl border border-zinc-800 bg-zinc-900 px-6 py-4 shadow-sm transition-all hover:border-zinc-700 hover:shadow-xl cursor-pointer"
     >
-      <div className="flex items-center justify-between">
+      <div className="flex items-center gap-3">
         <span className="text-sm font-medium text-zinc-400">{title}</span>
-        <Maximize2
-          size={14}
-          className="opacity-0 transition-opacity group-hover:opacity-100 text-zinc-500"
-        />
+        {sentiment ? (
+          <span className={"flex items-center gap-1 text-[10px] font-bold " + sentColor}>
+            {sentiment === "positive" ? <TrendingUp size={10} /> : null}
+            {sentiment.toUpperCase()}
+          </span>
+        ) : null}
       </div>
-      <div className="mt-4 flex items-baseline gap-1">
-        <span className="text-4xl font-black tracking-tight text-white">
+      <div className="flex items-baseline gap-1.5">
+        <span className="text-2xl font-black tracking-tight text-white">
           {value == null ? "—" : value}
         </span>
         {unit ? (
-          <span className="text-sm font-medium text-zinc-500">{unit}</span>
+          <span className="text-xs font-medium text-zinc-500">{unit}</span>
         ) : null}
-      </div>
-      <div
-        className={
-          "mt-2 flex items-center gap-1 text-xs font-bold " + sentColor
-        }
-      >
-        {sentiment === "positive" ? <TrendingUp size={12} /> : null}
-        {sentiment ? sentiment.toUpperCase() : "NEUTRAL"}
+        <Maximize2
+          size={12}
+          className="ml-2 opacity-0 transition-opacity group-hover:opacity-100 text-zinc-500"
+        />
       </div>
     </motion.div>
   );
@@ -229,37 +227,23 @@ function ListWidget(props: any) {
     <motion.div
       layout
       onClick={onClick}
-      className="group flex flex-col rounded-3xl border border-zinc-800 bg-zinc-900 p-6 shadow-sm transition-all hover:border-zinc-700 hover:shadow-xl cursor-pointer"
+      className="group flex flex-col rounded-3xl border border-zinc-800 bg-zinc-900 px-6 py-4 shadow-sm transition-all hover:border-zinc-700 hover:shadow-xl cursor-pointer"
     >
-      <div className="mb-4 flex items-center justify-between">
-        <h3 className="text-sm font-bold text-white uppercase tracking-wider">
-          {title}
-        </h3>
-        <Maximize2
-          size={14}
-          className="opacity-0 transition-opacity group-hover:opacity-100 text-zinc-500"
-        />
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-xs font-black text-zinc-500 uppercase tracking-widest">{title}</h3>
+        <Maximize2 size={12} className="opacity-0 transition-opacity group-hover:opacity-100 text-zinc-500" />
       </div>
-      <div className="max-h-[320px] space-y-3 overflow-y-auto">
+      <div className="max-h-[280px] overflow-y-auto">
         {items.map(function (item: any, i: number) {
           const dotColor = item.completed ? "bg-zinc-700" : "bg-blue-500";
-          const textColor = item.completed
-            ? "text-zinc-500 line-through"
-            : "text-zinc-100";
+          const textColor = item.completed ? "text-zinc-500 line-through" : "text-zinc-200";
           return (
-            <div
-              key={i}
-              className="flex items-start gap-3 border-b border-zinc-800 pb-3 last:border-0"
-            >
-              <div
-                className={"mt-1 h-2 w-2 shrink-0 rounded-full " + dotColor}
-              />
-              <div className="flex-1 min-w-0">
-                <p className={"text-sm truncate " + textColor}>{item.text}</p>
-                {item.date ? (
-                  <span className="text-[10px] text-zinc-500">{item.date}</span>
-                ) : null}
-              </div>
+            <div key={i} className="flex items-center gap-3 py-2 border-b border-zinc-800/60 last:border-0">
+              <div className={"h-1.5 w-1.5 shrink-0 rounded-full " + dotColor} />
+              <p className={"flex-1 text-sm truncate " + textColor}>{item.text}</p>
+              {item.date ? (
+                <span className="shrink-0 text-[10px] text-zinc-600">{item.date}</span>
+              ) : null}
             </div>
           );
         })}
