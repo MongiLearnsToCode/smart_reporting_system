@@ -29,6 +29,7 @@ import {
   Pin,
   PinOff,
   LogOut,
+  ArrowUpDown,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -634,6 +635,7 @@ export default function CodexApp() {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [previewFile, setPreviewFile] = useState<File | null>(null);
   const [showFilePreview, setShowFilePreview] = useState(false);
+  const [widgetSort, setWidgetSort] = useState<"title" | "created" | "recent">("title");
   const userMenuRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -834,7 +836,18 @@ export default function CodexApp() {
     );
   }
 
-  const widgets = (widgetsData && widgetsData.widgets) || [];
+  const widgets = [...((widgetsData && widgetsData.widgets) || [])].sort(function (a: any, b: any) {
+    if (widgetSort === "title") return a.title.localeCompare(b.title);
+    if (widgetSort === "created") return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+    if (widgetSort === "recent") {
+      const lastLog = (cat: string) => {
+        const logs = allLogs.filter((l: any) => l.category === cat);
+        return logs.length ? new Date(logs[0].timestamp).getTime() : 0;
+      };
+      return lastLog(b.config?.category) - lastLog(a.config?.category);
+    }
+    return 0;
+  });
 
   return (
     <div className="flex h-screen w-full flex-col bg-black text-zinc-100 font-sans selection:bg-white selection:text-black">
@@ -969,6 +982,26 @@ export default function CodexApp() {
             </motion.div>
           ) : null}
           <div className="columns-1 md:columns-2 xl:columns-3 gap-5 space-y-5">
+            {widgets.length > 0 ? (
+              <div className="break-inside-avoid mb-1 flex items-center justify-end">
+                <div className="flex items-center gap-1.5 rounded-full border border-zinc-800 bg-zinc-900 p-1">
+                  <ArrowUpDown size={11} className="text-zinc-600 ml-1.5" />
+                  {(["title", "created", "recent"] as const).map((opt) => (
+                    <button
+                      key={opt}
+                      onClick={() => setWidgetSort(opt)}
+                      className={`rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-widest transition-all ${
+                        widgetSort === opt
+                          ? "bg-zinc-700 text-white"
+                          : "text-zinc-500 hover:text-zinc-300"
+                      }`}
+                    >
+                      {opt === "title" ? "A–Z" : opt === "created" ? "Created" : "Recent"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
             {widgets.map(function (widget: any) {
               const data = getWidgetData(
                 widget.config && widget.config.category,
