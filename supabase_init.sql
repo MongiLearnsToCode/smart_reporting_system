@@ -26,6 +26,7 @@ create table if not exists public.logs (
   entities jsonb,
   is_conflict boolean not null default false,
   conflict_source_id uuid references public.logs(id),
+  conflict_reason text,
   timestamp timestamptz not null default now()
 );
 

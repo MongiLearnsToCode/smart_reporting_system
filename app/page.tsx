@@ -375,7 +375,9 @@ function LogPreviewModal(props: any) {
               </p>
             </div>
             <p className="text-xs text-zinc-400 leading-relaxed">
-              Another <span className="font-bold text-zinc-300">{log.category}</span> entry was already logged earlier today. This entry may duplicate or contradict it.
+              {log.conflict_reason || (
+                <>Another <span className="font-bold text-zinc-300">{log.category}</span> entry was already logged earlier today. This entry may duplicate or contradict it.</>
+              )}
             </p>
             {log.conflict_source_id && allLogs ? (
               (() => {
@@ -1100,7 +1102,9 @@ export default function CodexApp() {
                     <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-3 py-2.5 space-y-1.5">
                       <p className="text-[9px] font-black uppercase tracking-widest text-zinc-600">Why flagged</p>
                       <p className="text-[11px] text-zinc-400 leading-relaxed">
-                        Another <span className="font-bold text-zinc-300">{log.category}</span> entry was already logged today.
+                        {log.conflict_reason || (
+                          <>Another <span className="font-bold text-zinc-300">{log.category}</span> entry was already logged today.</>
+                        )}
                       </p>
                       {log.conflict_source_id ? (
                         (() => {

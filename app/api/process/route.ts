@@ -77,20 +77,47 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Conflict detection: same category logged today
+    // Conflict detection: fetch today's logs in same category, then ask AI to compare content
     const today = new Date().toISOString().split('T')[0];
-    const { data: similarLogs } = await admin
+    const { data: todayLogs } = await admin
       .from('logs')
-      .select('id')
+      .select('id, raw_content')
       .eq('user_id', userId)
       .eq('category', extracted.category)
       .gte('timestamp', today)
-      .lt('timestamp', new Date(Date.now() + 86400000).toISOString().split('T')[0])
       .order('timestamp', { ascending: false })
-      .limit(1);
+      .limit(5);
 
-    const isConflict = (similarLogs?.length ?? 0) > 0;
-    const conflictSourceId = isConflict ? (similarLogs as any)[0].id : null;
+    let isConflict = false;
+    let conflictSourceId: string | null = null;
+    let conflictReason: string | null = null;
+
+    if (todayLogs && todayLogs.length > 0) {
+      const comparisons = todayLogs.map((l: any, i: number) => `[${i + 1}] ${l.raw_content}`).join('\n\n');
+      const similarityPrompt = `You are a duplicate-detection assistant. Compare the NEW entry against each EXISTING entry and return ONLY valid JSON.
+
+NEW ENTRY:
+${rawContent}
+
+EXISTING ENTRIES TODAY (same category):
+${comparisons}
+
+Rules:
+- "duplicate": true only if the new entry conveys identical or near-identical information as an existing entry (more similarities than differences in actual content, facts, or figures).
+- "duplicate": false if the entries are merely in the same category but describe different events, amounts, people, or dates.
+- If duplicate, set "source_index" to the 1-based index of the most similar existing entry, and "reason" to a one-sentence plain-English explanation of why they are duplicates.
+
+Return: { "duplicate": boolean, "source_index": number | null, "reason": string | null }`;
+
+      const similarityResult = await callGroq([{ role: 'user', content: similarityPrompt }]);
+      const similarity = extractJson(similarityResult);
+
+      if (similarity.duplicate && similarity.source_index != null) {
+        isConflict = true;
+        conflictSourceId = (todayLogs as any)[similarity.source_index - 1].id;
+        conflictReason = similarity.reason ?? null;
+      }
+    }
 
     const { data: savedLog, error: insertError } = await admin
       .from('logs')
@@ -103,6 +130,7 @@ export async function POST(request: NextRequest) {
         entities: extracted.entities,
         is_conflict: isConflict,
         conflict_source_id: conflictSourceId,
+        conflict_reason: conflictReason,
       })
       .select()
       .single();
