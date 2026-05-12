@@ -28,6 +28,7 @@ import {
   ScrollText,
   Pin,
   PinOff,
+  LogOut,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -530,6 +531,7 @@ export default function CodexApp() {
   const [previewLog, setPreviewLog] = useState<any>(null);
   const [showConflicts, setShowConflicts] = useState(false);
   const [isLogFeedPinned, setIsLogFeedPinned] = useState(true);
+  const [showUserMenu, setShowUserMenu] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(
@@ -756,16 +758,44 @@ export default function CodexApp() {
           <button className="hidden sm:flex items-center gap-2 rounded-full border border-zinc-800 bg-zinc-900 px-4 py-1.5 text-xs font-bold transition-all hover:bg-zinc-800">
             <Download size={13} /> Export PDF
           </button>
-          <div className="h-8 w-8 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center overflow-hidden">
-            {user && user.user_metadata?.avatar_url ? (
-              <img
-                src={user.user_metadata.avatar_url}
-                alt="avatar"
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <Users size={15} />
-            )}
+          <div className="relative">
+            <button
+              onClick={function () { setShowUserMenu(function (v) { return !v; }); }}
+              className="h-8 w-8 rounded-full bg-zinc-800 border border-zinc-700 flex items-center justify-center overflow-hidden hover:border-zinc-500 transition-colors"
+            >
+              {user && user.user_metadata?.avatar_url ? (
+                <img src={user.user_metadata.avatar_url} alt="avatar" className="w-full h-full object-cover" />
+              ) : (
+                <Users size={15} />
+              )}
+            </button>
+            <AnimatePresence>
+              {showUserMenu ? (
+                <motion.div
+                  initial={{ opacity: 0, y: 6, scale: 0.96 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 6, scale: 0.96 }}
+                  className="absolute right-0 top-10 z-50 w-56 rounded-2xl border border-zinc-800 bg-zinc-950 shadow-2xl overflow-hidden"
+                >
+                  <div className="px-4 py-3 border-b border-zinc-800">
+                    {user?.user_metadata?.full_name ? (
+                      <p className="text-sm font-bold text-white truncate">{user.user_metadata.full_name}</p>
+                    ) : null}
+                    <p className="text-xs text-zinc-500 truncate">{user?.email}</p>
+                  </div>
+                  <button
+                    onClick={async function () {
+                      const { createClient } = await import("@/utils/supabase/client");
+                      await createClient().auth.signOut();
+                      window.location.href = "/account/signin";
+                    }}
+                    className="flex w-full items-center gap-2.5 px-4 py-3 text-sm text-zinc-400 hover:bg-zinc-900 hover:text-white transition-colors"
+                  >
+                    <LogOut size={14} /> Sign out
+                  </button>
+                </motion.div>
+              ) : null}
+            </AnimatePresence>
           </div>
         </div>
       </header>
