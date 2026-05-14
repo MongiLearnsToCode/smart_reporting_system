@@ -1591,25 +1591,23 @@ export default function CodexApp() {
         ) : null}
       </AnimatePresence>
 
-      <AnimatePresence>
-        {showSettings ? (
-          <SettingsModal
-            settings={{
-              currency: "USD",
-              timezone: "UTC",
-              ai_language: "English",
-              conflict_detection: true,
-              conflict_dismiss_days: 7,
-              default_widget_sort: "title",
-              canvas_density: "comfortable",
-              data_retention_days: 90,
-              ...userSettings,
-            }}
-            onSave={async (s: any) => { await settingsMutation.mutateAsync(s); }}
-            onClose={() => setShowSettings(false)}
-          />
-        ) : null}
-      </AnimatePresence>
+      {showSettings ? (
+        <SettingsModal
+          settings={{
+            currency: "USD",
+            timezone: "UTC",
+            ai_language: "English",
+            conflict_detection: true,
+            conflict_dismiss_days: 7,
+            default_widget_sort: "title",
+            canvas_density: "comfortable",
+            data_retention_days: 90,
+            ...userSettings,
+          }}
+          onSave={async (s: any) => { await settingsMutation.mutateAsync(s); }}
+          onClose={() => setShowSettings(false)}
+        />
+      ) : null}
     </div>
   );
 }
