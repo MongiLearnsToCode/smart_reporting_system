@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
   Switch, Button, Label, Input, Separator, ScrollArea,
 } from "@/utils/client-integrations/shadcn-ui";
@@ -656,6 +656,9 @@ function SettingsModal({ settings, onSave, onClose }: {
           <DialogTitle className="flex items-center gap-2 text-sm font-black uppercase tracking-widest">
             <Settings size={15} className="text-zinc-400" /> Settings
           </DialogTitle>
+          <DialogDescription className="sr-only">
+            Configure application settings including currency, AI behaviour, conflict detection, canvas, and data retention
+          </DialogDescription>
         </DialogHeader>
 
         <ScrollArea className="max-h-[70vh]">
