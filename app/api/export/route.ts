@@ -1,23 +1,16 @@
 import { createClient } from '@/utils/supabase/server';
 import { createAdminClient } from '@/utils/supabase/admin';
 import { NextRequest, NextResponse } from 'next/server';
-
-async function callGroq(messages: any[]) {
-  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
-    },
-    body: JSON.stringify({ model: 'llama-3.3-70b-versatile', messages, stream: false }),
-  });
-  if (!res.ok) throw new Error(`Groq error ${res.status}: ${await res.text()}`);
-  const data = await res.json();
-  return data.choices[0].message.content;
-}
+import { assertSameOrigin, getClientIp, rateLimit, toErrorResponse } from '@/utils/api/guards';
+import { callGroq } from '@/utils/api/groq';
+import { escapeHtml, safeFilenamePart } from '@/utils/api/html';
+import { parseExportPayload } from '@/utils/api/validation';
 
 export async function POST(request: NextRequest) {
   try {
+    assertSameOrigin(request);
+    rateLimit(`export:${getClientIp(request)}`, { limit: 10, windowMs: 60_000 });
+
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
@@ -25,10 +18,9 @@ export async function POST(request: NextRequest) {
     }
 
     const admin = createAdminClient();
-    const { range, template } = await request.json();
+    const { range: days, template } = parseExportPayload(await request.json());
     const userId = user.id;
 
-    const days = parseInt(range) || 30;
     const since = new Date(Date.now() - days * 86400000).toISOString();
 
     const { data: logs, error } = await admin
@@ -52,11 +44,11 @@ export async function POST(request: NextRequest) {
     const htmlContent = `
       <html>
         <body style="font-family: sans-serif; padding: 40px; color: #333;">
-          <h1 style="border-bottom: 2px solid #000; padding-bottom: 10px;">CODEX: ${template}</h1>
-          <p style="color: #666;">Generated on ${new Date().toLocaleDateString()} for the last ${days} days</p>
+          <h1 style="border-bottom: 2px solid #000; padding-bottom: 10px;">CODEX: ${escapeHtml(template)}</h1>
+          <p style="color: #666;">Generated on ${escapeHtml(new Date().toLocaleDateString())} for the last ${days} days</p>
           <div style="background: #f4f4f5; padding: 20px; border-radius: 12px; margin: 20px 0;">
             <h2 style="margin-top: 0;">Executive Summary</h2>
-            <p>${executiveSummary}</p>
+            <p>${escapeHtml(executiveSummary)}</p>
           </div>
           <h2>Key Logs</h2>
           ${(logs || [])
@@ -64,8 +56,8 @@ export async function POST(request: NextRequest) {
             .map(
               (log) => `
             <div style="border-bottom: 1px solid #eee; padding: 10px 0;">
-              <div style="font-size: 10px; color: #999;">${new Date(log.timestamp).toLocaleString()} | ${log.category}</div>
-              <div style="font-size: 14px;">${log.raw_content}</div>
+              <div style="font-size: 10px; color: #999;">${escapeHtml(new Date(log.timestamp).toLocaleString())} | ${escapeHtml(log.category)}</div>
+              <div style="font-size: 14px; white-space: pre-wrap;">${escapeHtml(log.raw_content)}</div>
             </div>`
             )
             .join('')}
@@ -76,11 +68,11 @@ export async function POST(request: NextRequest) {
     return new Response(htmlContent, {
       headers: {
         'Content-Type': 'text/html',
-        'Content-Disposition': `attachment; filename="Codex_Report_${template.replace(/\s/g, '_')}.html"`,
+        'Content-Disposition': `attachment; filename="Codex_Report_${safeFilenamePart(template)}.html"`,
       },
     });
   } catch (error: any) {
     console.error('api/export error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return toErrorResponse(error);
   }
 }

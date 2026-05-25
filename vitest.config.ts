@@ -10,13 +10,14 @@ export default defineConfig({
     globals: true,
     setupFiles: './test/setupTests.ts',
     include: [
-      'src/**/*.{test,spec}.{js,ts,jsx,tsx}',
-      '../../shared/**/*.{test,spec}.{js,ts,jsx,tsx}',
+      'app/**/*.{test,spec}.{js,ts,jsx,tsx}',
+      'utils/**/*.{test,spec}.{js,ts,jsx,tsx}',
+      'test/**/*.{test,spec}.{js,ts,jsx,tsx}',
     ],
   },
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './src'),
+      '@': path.resolve(__dirname, '.'),
     },
   },
   esbuild: {

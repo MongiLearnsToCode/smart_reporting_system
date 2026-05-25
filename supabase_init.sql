@@ -36,6 +36,12 @@ create policy "Users can manage their own logs"
   on public.logs for all
   using (auth.uid() = user_id);
 
+create index if not exists logs_user_timestamp_idx
+  on public.logs (user_id, timestamp desc);
+
+create index if not exists logs_user_category_timestamp_idx
+  on public.logs (user_id, category, timestamp desc);
+
 -- Widgets
 create table if not exists public.widgets (
   id uuid primary key default gen_random_uuid(),
@@ -51,6 +57,12 @@ alter table public.widgets enable row level security;
 create policy "Users can manage their own widgets"
   on public.widgets for all
   using (auth.uid() = user_id);
+
+create index if not exists widgets_user_created_idx
+  on public.widgets (user_id, created_at desc);
+
+create index if not exists widgets_user_title_idx
+  on public.widgets (user_id, title);
 
 -- User Settings
 create table if not exists public.user_settings (

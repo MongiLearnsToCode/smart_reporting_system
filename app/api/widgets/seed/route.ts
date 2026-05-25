@@ -1,9 +1,13 @@
 import { createClient } from '@/utils/supabase/server';
 import { createAdminClient } from '@/utils/supabase/admin';
 import { NextRequest, NextResponse } from 'next/server';
+import { assertSameOrigin, toErrorResponse } from '@/utils/api/guards';
+import { parseIndustry } from '@/utils/api/validation';
 
 export async function POST(request: NextRequest) {
   try {
+    assertSameOrigin(request);
+
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
@@ -11,7 +15,7 @@ export async function POST(request: NextRequest) {
     }
 
     const admin = createAdminClient();
-    const { industry } = await request.json();
+    const industry = parseIndustry(await request.json());
     const userId = user.id;
 
     const presets = [
@@ -27,14 +31,25 @@ export async function POST(request: NextRequest) {
     }
 
     for (const p of presets) {
-      await admin.from('widgets').upsert(
-        { user_id: userId, type: p.type, title: p.title, config: p.config },
-        { onConflict: 'user_id,title', ignoreDuplicates: true }
-      );
+      const { data: existing } = await admin
+        .from('widgets')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('title', p.title)
+        .limit(1);
+
+      if (!existing?.length) {
+        await admin.from('widgets').insert({
+          user_id: userId,
+          type: p.type,
+          title: p.title,
+          config: p.config,
+        });
+      }
     }
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return toErrorResponse(error);
   }
 }

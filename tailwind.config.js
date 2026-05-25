@@ -1,5 +1,5 @@
 module.exports = {
-	content: ['./app/**/*.{js,ts,jsx,tsx}', './utils/**/*.{js,ts,jsx,tsx}', './__create/**/*.{js,ts,jsx,tsx}'],
+	content: ['./app/**/*.{js,ts,jsx,tsx}', './utils/**/*.{js,ts,jsx,tsx}'],
 	theme: {
 		fontFamily: {
 			sans: ['Inter', 'sans-serif'],

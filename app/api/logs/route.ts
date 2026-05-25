@@ -1,6 +1,7 @@
 import { createClient } from '@/utils/supabase/server';
 import { createAdminClient } from '@/utils/supabase/admin';
 import { NextRequest, NextResponse } from 'next/server';
+import { toErrorResponse } from '@/utils/api/guards';
 
 export async function GET(request: NextRequest) {
   try {
@@ -14,12 +15,14 @@ export async function GET(request: NextRequest) {
     const admin = createAdminClient();
     const { searchParams } = new URL(request.url);
     const before = searchParams.get('before');
+    const limit = Math.min(100, Math.max(1, Number(searchParams.get('limit')) || 100));
 
     let query = admin
       .from('logs')
       .select('*')
       .eq('user_id', user.id)
-      .order('timestamp', { ascending: false });
+      .order('timestamp', { ascending: false })
+      .limit(limit);
 
     if (before) {
       query = query.lte('timestamp', before);
@@ -30,6 +33,6 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ logs });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return toErrorResponse(error);
   }
 }

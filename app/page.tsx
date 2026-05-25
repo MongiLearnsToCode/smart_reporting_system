@@ -51,6 +51,7 @@ import {
 } from "recharts";
 import useUpload from "@/utils/useUpload";
 import useUser from "@/utils/useUser";
+import { toast } from "sonner";
 
 const CATEGORY_COLORS: Record<string, any> = {
   Finance: {
@@ -820,6 +821,7 @@ export default function CodexApp() {
   const [showFilePreview, setShowFilePreview] = useState(false);
   const [widgetSort, setWidgetSort] = useState<"title" | "created" | "recent">("title");
   const [showSettings, setShowSettings] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -917,6 +919,7 @@ export default function CodexApp() {
     },
     onError: function (err) {
       console.error("Process error:", err);
+      toast.error(err instanceof Error ? err.message : "Processing failed");
       setIsProcessing(false);
     },
   });
@@ -973,7 +976,12 @@ export default function CodexApp() {
     }
 
     const uploadResult = await upload({ file });
-    const fileUrl = uploadResult && !("error" in uploadResult) ? uploadResult.url : null;
+    if (!uploadResult || "error" in uploadResult) {
+      setIsProcessing(false);
+      toast.error(uploadResult?.error || "Upload failed");
+      return;
+    }
+    const fileUrl = uploadResult.url;
 
     processMutation.mutate({
       rawContent: rawContent,
@@ -1038,8 +1046,41 @@ export default function CodexApp() {
   ) as string[];
 
   async function handleRevert(logId: string) {
-    await fetch("/api/logs/" + logId, { method: "DELETE" });
+    const res = await fetch("/api/logs/" + logId, { method: "DELETE" });
+    if (!res.ok) {
+      toast.error("Could not revert conflict");
+      return;
+    }
     queryClient.invalidateQueries({ queryKey: ["logs"] });
+  }
+
+  async function handleExport() {
+    setIsExporting(true);
+    try {
+      const res = await fetch("/api/export", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ range: 30, template: "Executive Summary" }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Export failed");
+      }
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "Codex_Report_Executive_Summary.html";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Export failed");
+    } finally {
+      setIsExporting(false);
+    }
   }
 
   if (userLoading || !user) {
@@ -1106,8 +1147,12 @@ export default function CodexApp() {
               <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-amber-500" />
             ) : null}
           </button>
-          <button className="hidden sm:flex items-center gap-2 rounded-full border border-zinc-800 bg-zinc-900 px-4 py-1.5 text-xs font-bold transition-all hover:bg-zinc-800">
-            <Download size={13} /> Export PDF
+          <button
+            onClick={handleExport}
+            disabled={isExporting}
+            className="hidden sm:flex items-center gap-2 rounded-full border border-zinc-800 bg-zinc-900 px-4 py-1.5 text-xs font-bold transition-all hover:bg-zinc-800 disabled:opacity-50"
+          >
+            <Download size={13} /> {isExporting ? "Exporting" : "Export Report"}
           </button>
           <div className="relative" ref={userMenuRef}>
             <button

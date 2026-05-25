@@ -1,12 +1,16 @@
 import { createClient } from '@/utils/supabase/server';
 import { createAdminClient } from '@/utils/supabase/admin';
 import { NextRequest, NextResponse } from 'next/server';
+import { assertSameOrigin, getClientIp, rateLimit, toErrorResponse } from '@/utils/api/guards';
 
 export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    assertSameOrigin(request);
+    rateLimit(`delete-log:${getClientIp(request)}`, { limit: 30, windowMs: 60_000 });
+
     const { id } = await params;
     const supabase = await createClient();
     
@@ -46,6 +50,6 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return toErrorResponse(error);
   }
 }

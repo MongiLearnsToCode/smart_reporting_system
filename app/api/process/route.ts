@@ -1,33 +1,15 @@
 import { createClient } from '@/utils/supabase/server';
 import { createAdminClient } from '@/utils/supabase/admin';
 import { NextRequest, NextResponse } from 'next/server';
-
-function extractJson(text: string) {
-  let cleaned = text.trim();
-  if (cleaned.startsWith('```')) {
-    cleaned = cleaned.slice(cleaned.indexOf('\n') + 1);
-    const last = cleaned.lastIndexOf('```');
-    if (last !== -1) cleaned = cleaned.slice(0, last).trim();
-  }
-  return JSON.parse(cleaned);
-}
-
-async function callGroq(messages: any[]) {
-  const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
-    },
-    body: JSON.stringify({ model: 'llama-3.3-70b-versatile', messages, stream: false }),
-  });
-  if (!res.ok) throw new Error(`Groq error ${res.status}: ${await res.text()}`);
-  const data = await res.json();
-  return data.choices[0].message.content;
-}
+import { assertSameOrigin, getClientIp, rateLimit, toErrorResponse } from '@/utils/api/guards';
+import { callGroq, extractJson } from '@/utils/api/groq';
+import { parseProcessPayload } from '@/utils/api/validation';
 
 export async function POST(request: NextRequest) {
   try {
+    assertSameOrigin(request);
+    rateLimit(`process:${getClientIp(request)}`, { limit: 20, windowMs: 60_000 });
+
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
@@ -35,7 +17,7 @@ export async function POST(request: NextRequest) {
     }
 
     const admin = createAdminClient();
-    const { rawContent, type, fileUrl } = await request.json();
+    const { rawContent, type, fileUrl } = parseProcessPayload(await request.json());
     const userId = user.id;
 
     // Load user settings
@@ -123,10 +105,15 @@ Return: { "duplicate": boolean, "source_index": number | null, "reason": string 
       const similarityResult = await callGroq([{ role: 'user', content: similarityPrompt }]);
       const similarity = extractJson(similarityResult);
 
-      if (similarity.duplicate && similarity.source_index != null) {
+      if (
+        similarity.duplicate &&
+        Number.isInteger(similarity.source_index) &&
+        similarity.source_index >= 1 &&
+        similarity.source_index <= recentLogs.length
+      ) {
         isConflict = true;
         conflictSourceId = (recentLogs as any)[similarity.source_index - 1].id;
-        conflictReason = similarity.reason ?? null;
+        conflictReason = typeof similarity.reason === 'string' ? similarity.reason.slice(0, 500) : null;
       }
     }
 
@@ -171,6 +158,9 @@ Return: { "duplicate": boolean, "source_index": number | null, "reason": string 
     return NextResponse.json({ success: true, log: savedLog });
   } catch (error: any) {
     console.error('api/process error:', error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error instanceof Error && /required|too long/.test(error.message)) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+    return toErrorResponse(error);
   }
 }
