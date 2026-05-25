@@ -7,20 +7,34 @@ const useUser = () => {
 
   React.useEffect(() => {
     const supabase = createClient();
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      setUser(user);
-      setLoading(false);
-    });
+    supabase.auth
+      .getUser()
+      .then(({ data: { user } }) => {
+        setUser(user);
+      })
+      .catch((error) => {
+        console.error('Failed to load Supabase user:', error);
+        setUser(null);
+      })
+      .finally(() => {
+        setLoading(false);
+      });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
+      setLoading(false);
     });
     return () => subscription.unsubscribe();
   }, []);
 
   const refetch = React.useCallback(async () => {
     const supabase = createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    setUser(user);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      setUser(user);
+    } catch (error) {
+      console.error('Failed to refresh Supabase user:', error);
+      setUser(null);
+    }
   }, []);
 
   return { user, data: user, loading, refetch };
