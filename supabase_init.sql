@@ -1,3 +1,10 @@
+-- Rate Limits (for distributed rate limiting across serverless instances)
+create table if not exists public.rate_limits (
+  key text primary key,
+  count integer not null default 1,
+  reset_at timestamptz not null
+);
+
 -- Categories
 create table if not exists public.categories (
   id uuid primary key default gen_random_uuid(),

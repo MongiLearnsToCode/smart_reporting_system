@@ -11,6 +11,7 @@ export default function SignUpPage() {
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [emailSent, setEmailSent] = useState(false);
 
   const { signUpWithCredentials } = useAuth();
 
@@ -24,19 +25,54 @@ export default function SignUpPage() {
       setLoading(false);
       return;
     }
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters");
+      setLoading(false);
+      return;
+    }
+    if (!/[A-Za-z]/.test(password) || !/\d/.test(password)) {
+      setError("Password must contain at least one letter and one number");
+      setLoading(false);
+      return;
+    }
 
     try {
-      await (signUpWithCredentials as any)({
+      const result = await (signUpWithCredentials as any)({
         email,
         password,
         callbackUrl: "/",
-        redirect: true,
       });
-    } catch (err: any) {
-      setError(err.message || "Something went wrong. Please try again.");
+      if (result?.emailConfirmationRequired) {
+        setEmailSent(true);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
       setLoading(false);
     }
   };
+
+  if (emailSent) {
+    return (
+      <div className="flex min-h-screen w-full items-center justify-center bg-zinc-950 p-4 font-sans text-zinc-100">
+        <div className="w-full max-w-md space-y-8 rounded-3xl border border-zinc-800 bg-zinc-900 p-8 shadow-2xl text-center">
+          <h1 className="text-4xl font-black tracking-tighter text-white">CODEX</h1>
+          <div className="space-y-4">
+            <div className="mx-auto h-12 w-12 rounded-full bg-emerald-500/10 flex items-center justify-center">
+              <svg className="h-6 w-6 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+            </div>
+            <h2 className="text-xl font-bold text-white">Check your email</h2>
+            <p className="text-zinc-400 text-sm">
+              We sent a confirmation link to <strong className="text-white">{email}</strong>.
+              Click the link to activate your account, then sign in.
+            </p>
+            <a href="/account/signin" className="inline-block rounded-xl bg-white px-6 py-3 text-sm font-bold text-black transition-all hover:bg-zinc-200">
+              Back to Sign In
+            </a>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen w-full items-center justify-center bg-zinc-950 p-4 font-sans text-zinc-100">

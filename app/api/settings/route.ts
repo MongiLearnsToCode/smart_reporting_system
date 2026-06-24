@@ -1,6 +1,6 @@
 import { createClient } from '@/utils/supabase/server';
 import { NextRequest, NextResponse } from 'next/server';
-import { assertSameOrigin, toErrorResponse } from '@/utils/api/guards';
+import { assertSameOrigin, requireCsrf, toErrorResponse } from '@/utils/api/guards';
 import { DEFAULT_SETTINGS, parseSettings } from '@/utils/api/validation';
 
 export async function GET() {
@@ -15,6 +15,7 @@ export async function GET() {
 export async function PUT(request: NextRequest) {
   try {
     assertSameOrigin(request);
+    requireCsrf(request);
 
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();

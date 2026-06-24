@@ -3,8 +3,33 @@
 @tailwind utilities;
 
 @layer base {
-  input, textarea, select, button {
-    @apply outline-none focus:outline-none;
+  /* Visible focus rings for keyboard users only — mouse users get clean look */
+  :focus-visible {
+    outline: 2px solid #3b82f6;
+    outline-offset: 2px;
+  }
+
+  /* Suppress default outline on mouse focus only — :focus-visible still works */
+  input:focus:not(:focus-visible),
+  textarea:focus:not(:focus-visible),
+  select:focus:not(:focus-visible),
+  button:focus:not(:focus-visible) {
+    outline: none;
+  }
+
+  /* Light mode overrides for the dark-themed UI */
+  .light {
+    --bg-primary: theme('colors.white');
+    --bg-secondary: theme('colors.zinc.50');
+    --bg-tertiary: theme('colors.zinc.100');
+    --text-primary: theme('colors.zinc.900');
+    --text-secondary: theme('colors.zinc.600');
+    --border-color: theme('colors.zinc.200');
+  }
+
+  .light body {
+    background-color: var(--bg-secondary);
+    color: var(--text-primary);
   }
 
   /* Custom scrollbar — on-theme dark zinc */

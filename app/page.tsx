@@ -33,7 +33,7 @@ import {
   ScrollText,
   Pin,
   PinOff,
-  LogOut,
+  LogOut, Sun, Moon, Trash2, Pencil,
   ArrowUpDown,
   Settings,
 } from "lucide-react";
@@ -52,758 +52,23 @@ import {
 import useUpload from "@/utils/useUpload";
 import useUser from "@/utils/useUser";
 import { toast } from "sonner";
-
-const CATEGORY_COLORS: Record<string, any> = {
-  Finance: {
-    bg: "bg-emerald-500/15",
-    text: "text-emerald-400",
-    dot: "bg-emerald-400",
-    border: "border-emerald-500/30",
-  },
-  Inventory: {
-    bg: "bg-amber-500/15",
-    text: "text-amber-400",
-    dot: "bg-amber-400",
-    border: "border-amber-500/30",
-  },
-  Projects: {
-    bg: "bg-blue-500/15",
-    text: "text-blue-400",
-    dot: "bg-blue-400",
-    border: "border-blue-500/30",
-  },
-  Clients: {
-    bg: "bg-purple-500/15",
-    text: "text-purple-400",
-    dot: "bg-purple-400",
-    border: "border-purple-500/30",
-  },
-  Tasks: {
-    bg: "bg-orange-500/15",
-    text: "text-orange-400",
-    dot: "bg-orange-400",
-    border: "border-orange-500/30",
-  },
-  Team: {
-    bg: "bg-cyan-500/15",
-    text: "text-cyan-400",
-    dot: "bg-cyan-400",
-    border: "border-cyan-500/30",
-  },
-  Marketing: {
-    bg: "bg-pink-500/15",
-    text: "text-pink-400",
-    dot: "bg-pink-400",
-    border: "border-pink-500/30",
-  },
-};
-
-function getCat(cat: string) {
-  return (
-    CATEGORY_COLORS[cat] || {
-      bg: "bg-zinc-500/15",
-      text: "text-zinc-400",
-      dot: "bg-zinc-400",
-      border: "border-zinc-500/30",
-    }
-  );
-}
-
-function formatTimeAgo(timestamp: string | number | Date) {
-  const diff = Date.now() - new Date(timestamp).getTime();
-  if (diff < 60000) return "just now";
-  if (diff < 3600000) return Math.floor(diff / 60000) + "m ago";
-  if (diff < 86400000) return Math.floor(diff / 3600000) + "h ago";
-  return new Date(timestamp).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-  });
-}
-
-function MetricCard(props: any) {
-  const { title, value, unit, sentiment, onClick } = props;
-  const sentColor =
-    sentiment === "positive"
-      ? "text-emerald-400"
-      : sentiment === "negative"
-        ? "text-rose-400"
-        : "text-zinc-500";
-  return (
-    <motion.div
-      layout
-      onClick={onClick}
-      className="group relative flex items-center justify-between rounded-3xl border border-zinc-800 bg-zinc-900 px-6 py-4 shadow-sm transition-all hover:border-zinc-700 hover:shadow-xl cursor-pointer"
-    >
-      <div className="flex items-center gap-3">
-        <span className="text-sm font-medium text-zinc-400">{title}</span>
-        {sentiment ? (
-          <span className={"flex items-center gap-1 text-[10px] font-bold " + sentColor}>
-            {sentiment === "positive" ? <TrendingUp size={10} /> : null}
-            {sentiment.toUpperCase()}
-          </span>
-        ) : null}
-      </div>
-      <div className="flex items-baseline gap-1.5">
-        <span className="text-2xl font-black tracking-tight text-white">
-          {value == null ? "—" : value}
-        </span>
-        {unit ? (
-          <span className="text-xs font-medium text-zinc-500">{unit}</span>
-        ) : null}
-        <Maximize2
-          size={12}
-          className="ml-2 opacity-0 transition-opacity group-hover:opacity-100 text-zinc-500"
-        />
-      </div>
-    </motion.div>
-  );
-}
-
-function ChartWidget(props: any) {
-  const { title, data, type, onClick } = props;
-  const chartType = type || "line";
-  return (
-    <motion.div
-      layout
-      onClick={onClick}
-      className="group flex flex-col rounded-3xl border border-zinc-800 bg-zinc-900 p-6 shadow-sm transition-all hover:border-zinc-700 hover:shadow-xl cursor-pointer"
-    >
-      <div className="mb-4 flex items-center justify-between">
-        <h3 className="text-sm font-bold text-white uppercase tracking-wider">
-          {title}
-        </h3>
-        <Maximize2
-          size={14}
-          className="opacity-0 transition-opacity group-hover:opacity-100 text-zinc-500"
-        />
-      </div>
-      <div className="h-[200px]">
-        <ResponsiveContainer width="100%" height="100%">
-          {chartType === "line" ? (
-            <LineChart data={data}>
-              <CartesianGrid
-                strokeDasharray="3 3"
-                stroke="#27272a"
-                vertical={false}
-              />
-              <XAxis dataKey="date" hide />
-              <YAxis hide />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: "#18181b",
-                  border: "1px solid #3f3f46",
-                  borderRadius: "12px",
-                }}
-                itemStyle={{ color: "#fff" }}
-              />
-              <Line
-                type="monotone"
-                dataKey="value"
-                stroke="#fff"
-                strokeWidth={3}
-                dot={false}
-              />
-            </LineChart>
-          ) : (
-            <BarChart data={data}>
-              <CartesianGrid
-                strokeDasharray="3 3"
-                stroke="#27272a"
-                vertical={false}
-              />
-              <XAxis dataKey="date" hide />
-              <YAxis hide />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: "#18181b",
-                  border: "1px solid #3f3f46",
-                  borderRadius: "12px",
-                }}
-                itemStyle={{ color: "#fff" }}
-              />
-              <Bar dataKey="value" fill="#fff" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          )}
-        </ResponsiveContainer>
-      </div>
-    </motion.div>
-  );
-}
-
-function ListWidget(props: any) {
-  const { title, items, onClick } = props;
-  return (
-    <motion.div
-      layout
-      onClick={onClick}
-      className="group flex flex-col rounded-3xl border border-zinc-800 bg-zinc-900 px-6 py-4 shadow-sm transition-all hover:border-zinc-700 hover:shadow-xl cursor-pointer"
-    >
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="text-xs font-black text-zinc-500 uppercase tracking-widest">{title}</h3>
-        <Maximize2 size={12} className="opacity-0 transition-opacity group-hover:opacity-100 text-zinc-500" />
-      </div>
-      <div className="max-h-[280px] overflow-y-auto">
-        {items.map(function (item: any, i: number) {
-          const dotColor = item.completed ? "bg-zinc-700" : "bg-blue-500";
-          const textColor = item.completed ? "text-zinc-500 line-through" : "text-zinc-200";
-          return (
-            <div key={i} className="flex items-center gap-3 py-2 border-b border-zinc-800/60 last:border-0">
-              <div className={"h-1.5 w-1.5 shrink-0 rounded-full " + dotColor} />
-              <p className={"flex-1 text-sm truncate " + textColor}>{item.text}</p>
-              {item.date ? (
-                <span className="shrink-0 text-[10px] text-zinc-600">{item.date}</span>
-              ) : null}
-            </div>
-          );
-        })}
-      </div>
-    </motion.div>
-  );
-}
-
-function FilePreviewModal({ file, fileUrl, fileName, onClose }: {
-  file?: File;
-  fileUrl?: string;
-  fileName?: string;
-  onClose: () => void;
-}) {
-  const blobUrl = useRef(file ? URL.createObjectURL(file) : null);
-  useEffect(() => () => { if (blobUrl.current) URL.revokeObjectURL(blobUrl.current); }, []);
-
-  const url = blobUrl.current ?? fileUrl ?? "";
-  const name = file?.name ?? fileName ?? "";
-  const ext = name.split(".").pop()?.toLowerCase();
-  const isPdf = ext === "pdf";
-  const isImage = ["png", "jpg", "jpeg", "gif", "webp", "svg"].includes(ext || "");
-  const isText = ["txt", "csv", "md"].includes(ext || "");
-  const [textContent, setTextContent] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (isText && file) file.text().then(setTextContent);
-    else if (isText && url) fetch(url).then(r => r.text()).then(setTextContent);
-  }, [file, isText, url]);
-
-  return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
-      onClick={onClose}
-    >
-      <motion.div
-        initial={{ scale: 0.95, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        exit={{ scale: 0.95, opacity: 0 }}
-        onClick={(e) => e.stopPropagation()}
-        className="relative flex flex-col w-full max-w-4xl max-h-[90vh] rounded-2xl border border-zinc-800 bg-zinc-950 overflow-hidden shadow-2xl"
-      >
-        <div className="flex items-center justify-between px-5 py-3 border-b border-zinc-800 shrink-0">
-          <div className="flex items-center gap-2 min-w-0">
-            <FileText size={14} className="text-zinc-400 shrink-0" />
-            <span className="text-sm font-bold text-white truncate">{name}</span>
-            {file ? <span className="text-xs text-zinc-600 shrink-0">({(file.size / 1024).toFixed(1)} KB)</span> : null}
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <a
-              href={url}
-              download={name}
-              className="flex items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-xs font-bold text-zinc-400 hover:text-white transition-colors"
-            >
-              <Download size={12} /> Download
-            </a>
-            <button onClick={onClose} className="text-zinc-500 hover:text-white transition-colors">
-              <X size={18} />
-            </button>
-          </div>
-        </div>
-        <div className="flex-1 overflow-auto min-h-0">
-          {isPdf && (
-            <iframe src={url} className="w-full h-full min-h-[70vh]" title={name} />
-          )}
-          {isImage && (
-            <div className="flex items-center justify-center p-4 h-full">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={url} alt={name} className="max-w-full max-h-[75vh] object-contain rounded-lg" />
-            </div>
-          )}
-          {isText && (
-            <pre className="p-5 text-xs text-zinc-300 whitespace-pre-wrap font-mono leading-relaxed">
-              {textContent ?? "Loading..."}
-            </pre>
-          )}
-          {!isPdf && !isImage && !isText && (
-            <div className="flex flex-col items-center justify-center gap-4 py-20 text-zinc-500">
-              <FileText size={48} strokeWidth={1} />
-              <p className="text-sm font-medium">Preview not available for .{ext} files</p>
-              <a
-                href={url}
-                download={name}
-                className="flex items-center gap-2 rounded-xl bg-zinc-800 px-5 py-2.5 text-sm font-bold text-white hover:bg-zinc-700 transition-colors"
-              >
-                <Download size={14} /> Download to open
-              </a>
-            </div>
-          )}
-        </div>
-      </motion.div>
-    </motion.div>
-  );
-}
-
-function LogPreviewModal(props: any) {
-  const { log, onClose, allLogs } = props;
-  const [showAttachment, setShowAttachment] = useState(false);
-  if (!log) return null;
-  const cat = getCat(log.category);
-  const entities = log.entities || {};
-  const items = [];
-  if (entities.amount != null)
-    items.push({
-      icon: DollarSign,
-      label: "Amount",
-      value: ((entities.currency || "") + " " + entities.amount).trim(),
-    });
-  if (entities.date)
-    items.push({
-      icon: Calendar,
-      label: "Date",
-      value: new Date(entities.date).toLocaleDateString(),
-    });
-  if (entities.sentiment)
-    items.push({
-      icon: TrendingUp,
-      label: "Sentiment",
-      value: entities.sentiment,
-    });
-  if (entities.urgency)
-    items.push({ icon: Zap, label: "Urgency", value: entities.urgency });
-  if (entities.names && entities.names.length > 0)
-    items.push({
-      icon: User,
-      label: "People",
-      value: entities.names.join(", "),
-    });
-  if (entities.tags && entities.tags.length > 0)
-    items.push({ icon: Tag, label: "Tags", value: entities.tags.join(", ") });
-
-  return (
-    <>
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
-      onClick={onClose}
-    >
-      <motion.div
-        initial={{ scale: 0.94, y: 16 }}
-        animate={{ scale: 1, y: 0 }}
-        exit={{ scale: 0.94, y: 16 }}
-        className="w-full max-w-xl rounded-[36px] border border-zinc-800 bg-zinc-950 shadow-2xl overflow-hidden"
-        onClick={function (e) {
-          e.stopPropagation();
-        }}
-      >
-        <div className="px-8 pt-8 pb-6 border-b border-zinc-800/60">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div
-                className={
-                  "h-9 w-9 rounded-2xl flex items-center justify-center " +
-                  cat.bg
-                }
-              >
-                {log.type === "file" ? (
-                  <FileText size={16} className={cat.text} />
-                ) : (
-                  <MessageSquare size={16} className={cat.text} />
-                )}
-              </div>
-              <div>
-                <span
-                  className={
-                    "text-[10px] font-black uppercase tracking-widest " +
-                    cat.text
-                  }
-                >
-                  {log.category}
-                </span>
-                <p className="text-[11px] text-zinc-500 mt-0.5">
-                  {new Date(log.timestamp).toLocaleString()}
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              {log.is_conflict ? (
-                <div className="flex items-center gap-1 rounded-full bg-amber-500/10 border border-amber-500/30 px-3 py-1 text-[10px] font-black text-amber-400 uppercase tracking-widest">
-                  <AlertTriangle size={10} /> Conflict
-                </div>
-              ) : null}
-              <button
-                onClick={onClose}
-                className="h-8 w-8 rounded-full border border-zinc-800 bg-zinc-900 flex items-center justify-center text-zinc-500 hover:text-white transition-colors"
-              >
-                <X size={16} />
-              </button>
-            </div>
-          </div>
-        </div>
-        <div className="px-8 py-6 border-b border-zinc-800/60">
-          <p className="text-[10px] font-black uppercase tracking-widest text-zinc-600 mb-3">
-            Raw Log
-          </p>
-          <p className="text-zinc-200 text-sm leading-relaxed whitespace-pre-wrap">
-            {log.raw_content}
-          </p>
-          {log.file_url ? (
-            <button
-              onClick={function () { setShowAttachment(true); }}
-              className="mt-3 inline-flex items-center gap-2 text-[11px] font-bold text-blue-400 hover:text-blue-300 transition-colors"
-            >
-              <FileText size={12} /> View attached file
-            </button>
-          ) : null}
-        </div>
-        {log.is_conflict ? (
-          <div className="px-8 py-5 border-b border-zinc-800/60 bg-amber-500/5">
-            <div className="flex items-center gap-2 mb-2">
-              <AlertTriangle size={12} className="text-amber-400" />
-              <p className="text-[10px] font-black uppercase tracking-widest text-amber-400">
-                Why this is flagged
-              </p>
-            </div>
-            <p className="text-xs text-zinc-400 leading-relaxed">
-              {log.conflict_reason || (
-                <>Another <span className="font-bold text-zinc-300">{log.category}</span> entry was already logged earlier today. This entry may duplicate or contradict it.</>
-              )}
-            </p>
-            {log.conflict_source_id && allLogs ? (
-              (() => {
-                const src = allLogs.find((l: any) => l.id === log.conflict_source_id);
-                return src ? (
-                  <div className="mt-3 rounded-2xl border border-amber-500/20 bg-zinc-900 px-4 py-3">
-                    <p className="text-[9px] font-black uppercase tracking-widest text-zinc-600 mb-1">Conflicting entry</p>
-                    <p className="text-xs text-zinc-400 leading-relaxed line-clamp-3">{src.raw_content}</p>
-                    <p className="mt-1 text-[10px] text-zinc-600">{new Date(src.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</p>
-                  </div>
-                ) : null;
-              })()
-            ) : null}
-          </div>
-        ) : null}
-        {items.length > 0 ? (
-          <div className="px-8 py-6">
-            <p className="text-[10px] font-black uppercase tracking-widest text-zinc-600 mb-4">
-              Extracted Data
-            </p>
-            <div className="grid grid-cols-2 gap-3">
-              {items.map(function (item) {
-                const Icon = item.icon;
-                return (
-                  <div
-                    key={item.label}
-                    className="rounded-2xl border border-zinc-800 bg-zinc-900/60 px-4 py-3"
-                  >
-                    <div className="flex items-center gap-1.5 mb-1">
-                      <Icon size={11} className="text-zinc-500" />
-                      <span className="text-[9px] font-black uppercase tracking-widest text-zinc-600">
-                        {item.label}
-                      </span>
-                    </div>
-                    <p className="text-sm font-semibold text-zinc-200 capitalize truncate">
-                      {item.value}
-                    </p>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        ) : null}
-      </motion.div>
-    </motion.div>
-    <AnimatePresence>
-      {showAttachment && log.file_url ? (
-        <FilePreviewModal
-          fileUrl={log.file_url}
-          fileName={log.raw_content.match(/^(?:File|Uploaded file): ([^\n(]+)/)?.[1]?.trim() ?? "attachment"}
-          onClose={() => setShowAttachment(false)}
-        />
-      ) : null}
-    </AnimatePresence>
-    </>
-  );
-}
-
-function LogFeedItem(props: any) {
-  const { log, onClick, allLogs } = props;
-  const cat = getCat(log.category);
-  const preview =
-    log.raw_content && log.raw_content.length > 80
-      ? log.raw_content.slice(0, 80) + "…"
-      : log.raw_content;
-  const timeAgo = formatTimeAgo(log.timestamp);
-  const sentBg =
-    log.entities && log.entities.sentiment === "positive"
-      ? "bg-emerald-500/10 text-emerald-400"
-      : log.entities && log.entities.sentiment === "negative"
-        ? "bg-rose-500/10 text-rose-400"
-        : "bg-zinc-800 text-zinc-500";
-  const urgBg =
-    log.entities && log.entities.urgency === "high"
-      ? "bg-rose-500/10 text-rose-400"
-      : "bg-amber-500/10 text-amber-400";
-
-  return (
-    <motion.button
-      layout
-      initial={{ opacity: 0, x: 12 }}
-      animate={{ opacity: 1, x: 0 }}
-      onClick={onClick}
-      className="group w-full text-left rounded-2xl border border-zinc-800/80 bg-zinc-900/60 p-4 hover:border-zinc-700 hover:bg-zinc-900 transition-all"
-    >
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-2">
-          <div className={"h-1.5 w-1.5 rounded-full " + cat.dot} />
-          <span
-            className={
-              "text-[10px] font-black uppercase tracking-widest " + cat.text
-            }
-          >
-            {log.category}
-          </span>
-          {log.type === "file" ? (
-            <FileText size={10} className="text-zinc-600" />
-          ) : null}
-          {log.is_conflict ? (
-            <AlertTriangle size={10} className="text-amber-400" />
-          ) : null}
-        </div>
-        <span className="text-[10px] text-zinc-600">{timeAgo}</span>
-      </div>
-      <p className="text-xs text-zinc-400 leading-relaxed group-hover:text-zinc-300 transition-colors">
-        {preview}
-      </p>
-      {log.entities && log.entities.amount != null ? (
-        <p className="mt-2 text-sm font-bold text-white">
-          {(log.entities.currency || "$") + " "}
-          {Number(log.entities.amount).toLocaleString()}
-        </p>
-      ) : null}
-      <div className="mt-2 flex items-center justify-between">
-        <div className="flex gap-1.5">
-          {log.entities && log.entities.sentiment ? (
-            <span
-              className={
-                "text-[9px] font-bold uppercase rounded-full px-2 py-0.5 " +
-                sentBg
-              }
-            >
-              {log.entities.sentiment}
-            </span>
-          ) : null}
-          {log.entities &&
-          log.entities.urgency &&
-          log.entities.urgency !== "low" ? (
-            <span
-              className={
-                "text-[9px] font-bold uppercase rounded-full px-2 py-0.5 " +
-                urgBg
-              }
-            >
-              {log.entities.urgency}
-            </span>
-          ) : null}
-        </div>
-        <ChevronRight
-          size={12}
-          className="text-zinc-700 group-hover:text-zinc-500 transition-colors"
-        />
-      </div>
-    </motion.button>
-  );
-}
-
-const CURRENCIES = ["USD","EUR","GBP","ZAR","JPY","CAD","AUD","CHF","CNY","INR","BRL","MXN","NGN","KES","GHS"];
-const TIMEZONES = ["UTC","Africa/Johannesburg","Africa/Lagos","Africa/Nairobi","America/New_York","America/Chicago","America/Denver","America/Los_Angeles","America/Sao_Paulo","Europe/London","Europe/Paris","Europe/Berlin","Asia/Dubai","Asia/Kolkata","Asia/Singapore","Asia/Tokyo","Australia/Sydney"];
-const LANGUAGES = ["English","French","Spanish","Portuguese","German","Swahili","Zulu","Afrikaans","Arabic","Chinese","Hindi","Japanese"];
-
-function SettingsModal({ settings, onSave, onClose }: {
-  settings: any;
-  onSave: (s: any) => void;
-  onClose: () => void;
-}) {
-  const [form, setForm] = useState({ ...settings });
-  const [saving, setSaving] = useState(false);
-
-  function set(key: string, value: any) {
-    setForm((f: any) => ({ ...f, [key]: value }));
-  }
-
-  async function handleSave() {
-    setSaving(true);
-    try {
-      await onSave(form);
-      onClose();
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className="max-w-lg bg-zinc-950 border-zinc-800 text-white p-0 gap-0">
-        <DialogHeader className="px-6 py-4 border-b border-zinc-800">
-          <DialogTitle className="flex items-center gap-2 text-sm font-black uppercase tracking-widest">
-            <Settings size={15} className="text-zinc-400" /> Settings
-          </DialogTitle>
-          <DialogDescription className="sr-only">
-            Configure application settings including currency, AI behaviour, conflict detection, canvas, and data retention
-          </DialogDescription>
-        </DialogHeader>
-
-        <ScrollArea className="max-h-[70vh]">
-          <div className="divide-y divide-zinc-800/60">
-            {/* Currency & Finance */}
-            <section className="px-6 py-5 space-y-4">
-              <p className="text-[10px] font-black uppercase tracking-widest text-zinc-600">Currency & Finance</p>
-              <div className="flex items-center justify-between gap-4">
-                <Label className="text-sm text-zinc-300">Default currency</Label>
-                <Select value={form.currency} onValueChange={(v) => set("currency", v)}>
-                  <SelectTrigger className="w-32 bg-zinc-900 border-zinc-700 text-white">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-zinc-900 border-zinc-700">
-                    {CURRENCIES.map((c) => <SelectItem key={c} value={c} className="text-white">{c}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-            </section>
-
-            {/* AI Behaviour */}
-            <section className="px-6 py-5 space-y-4">
-              <p className="text-[10px] font-black uppercase tracking-widest text-zinc-600">AI Behaviour</p>
-              <div className="flex items-center justify-between gap-4">
-                <Label className="text-sm text-zinc-300">Timezone</Label>
-                <Select value={form.timezone} onValueChange={(v) => set("timezone", v)}>
-                  <SelectTrigger className="w-48 bg-zinc-900 border-zinc-700 text-white">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-zinc-900 border-zinc-700">
-                    {TIMEZONES.map((tz) => <SelectItem key={tz} value={tz} className="text-white">{tz}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex items-center justify-between gap-4">
-                <Label className="text-sm text-zinc-300">Summary language</Label>
-                <Select value={form.ai_language} onValueChange={(v) => set("ai_language", v)}>
-                  <SelectTrigger className="w-36 bg-zinc-900 border-zinc-700 text-white">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-zinc-900 border-zinc-700">
-                    {LANGUAGES.map((l) => <SelectItem key={l} value={l} className="text-white">{l}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-            </section>
-
-            {/* Conflicts */}
-            <section className="px-6 py-5 space-y-4">
-              <p className="text-[10px] font-black uppercase tracking-widest text-zinc-600">Conflict Detection</p>
-              <div className="flex items-center justify-between gap-4">
-                <Label className="text-sm text-zinc-300">Enable conflict detection</Label>
-                <Switch
-                  checked={form.conflict_detection}
-                  onCheckedChange={(v) => set("conflict_detection", v)}
-                />
-              </div>
-              {form.conflict_detection ? (
-                <div className="flex items-center justify-between gap-4">
-                  <Label className="text-sm text-zinc-300">Look-back window (days)</Label>
-                  <Input
-                    type="number"
-                    min={1}
-                    max={90}
-                    value={form.conflict_dismiss_days}
-                    onChange={(e) => set("conflict_dismiss_days", parseInt(e.target.value) || 1)}
-                    className="w-20 bg-zinc-900 border-zinc-700 text-white text-right"
-                  />
-                </div>
-              ) : null}
-            </section>
-
-            {/* Canvas */}
-            <section className="px-6 py-5 space-y-4">
-              <p className="text-[10px] font-black uppercase tracking-widest text-zinc-600">Canvas</p>
-              <div className="flex items-center justify-between gap-4">
-                <Label className="text-sm text-zinc-300">Default widget sort</Label>
-                <Select value={form.default_widget_sort} onValueChange={(v) => set("default_widget_sort", v)}>
-                  <SelectTrigger className="w-40 bg-zinc-900 border-zinc-700 text-white">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-zinc-900 border-zinc-700">
-                    <SelectItem value="title" className="text-white">A–Z</SelectItem>
-                    <SelectItem value="created" className="text-white">Created</SelectItem>
-                    <SelectItem value="recent" className="text-white">Recent activity</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex items-center justify-between gap-4">
-                <Label className="text-sm text-zinc-300">Canvas density</Label>
-                <Select value={form.canvas_density} onValueChange={(v) => set("canvas_density", v)}>
-                  <SelectTrigger className="w-36 bg-zinc-900 border-zinc-700 text-white">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-zinc-900 border-zinc-700">
-                    <SelectItem value="comfortable" className="text-white">Comfortable</SelectItem>
-                    <SelectItem value="compact" className="text-white">Compact</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </section>
-
-            {/* Data */}
-            <section className="px-6 py-5 space-y-4">
-              <p className="text-[10px] font-black uppercase tracking-widest text-zinc-600">Data</p>
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <Label className="text-sm text-zinc-300">Data retention</Label>
-                  <p className="text-xs text-zinc-600 mt-0.5">Logs older than this are hidden from the canvas</p>
-                </div>
-                <Select value={String(form.data_retention_days)} onValueChange={(v) => set("data_retention_days", parseInt(v))}>
-                  <SelectTrigger className="w-32 bg-zinc-900 border-zinc-700 text-white">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="bg-zinc-900 border-zinc-700">
-                    <SelectItem value="30" className="text-white">30 days</SelectItem>
-                    <SelectItem value="60" className="text-white">60 days</SelectItem>
-                    <SelectItem value="90" className="text-white">90 days</SelectItem>
-                    <SelectItem value="180" className="text-white">180 days</SelectItem>
-                    <SelectItem value="365" className="text-white">1 year</SelectItem>
-                    <SelectItem value="9999" className="text-white">Forever</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </section>
-          </div>
-        </ScrollArea>
-
-        <DialogFooter className="px-6 py-4 border-t border-zinc-800 flex justify-end gap-3 sm:justify-end">
-          <Button variant="outline" onClick={onClose} className="border-zinc-800 text-zinc-400 hover:text-white bg-transparent">
-            Cancel
-          </Button>
-          <Button onClick={handleSave} disabled={saving} className="bg-white text-black hover:bg-zinc-200">
-            {saving ? "Saving…" : "Save"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
+import { useTheme } from "next-themes";
+import { withCsrf, ensureCsrfToken } from "@/utils/api/csrf";
+import { MetricCard } from "@/components/metric-card";
+import { ChartWidget } from "@/components/chart-widget";
+import { ListWidget } from "@/components/list-widget";
+import { FilePreviewModal } from "@/components/file-preview-modal";
+import { LogPreviewModal } from "@/components/log-preview-modal";
+import { LogFeedItem } from "@/components/log-feed-item";
+import { SettingsModal } from "@/components/settings-modal";
+import { getCat } from "@/lib/categories";
+import { formatTimeAgo, type Log, type Entities, type Widget, type UserSettings } from "@/lib/dashboard-utils";
 
 export default function CodexApp() {
   const queryClient = useQueryClient();
   const userResult = useUser();
+
+  useEffect(function () { ensureCsrfToken(); }, []);
   const user = userResult.data as import("@supabase/supabase-js").User | null;
   const userLoading = userResult.loading;
   const uploadHook = useUpload();
@@ -813,7 +78,7 @@ export default function CodexApp() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [timeValue, setTimeValue] = useState(100);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const [previewLog, setPreviewLog] = useState<any>(null);
+  const [previewLog, setPreviewLog] = useState<Log | null>(null);
   const [showConflicts, setShowConflicts] = useState(false);
   const [isLogFeedPinned, setIsLogFeedPinned] = useState(true);
   const [showUserMenu, setShowUserMenu] = useState(false);
@@ -822,6 +87,7 @@ export default function CodexApp() {
   const [widgetSort, setWidgetSort] = useState<"title" | "created" | "recent">("title");
   const [showSettings, setShowSettings] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const { theme, setTheme } = useTheme();
   const userMenuRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -844,6 +110,11 @@ export default function CodexApp() {
     [user, userLoading],
   );
 
+  const [allLogs, setAllLogs] = useState<Log[]>([]);
+  const [hasMoreLogs, setHasMoreLogs] = useState(false);
+  const [logsCursor, setLogsCursor] = useState<string | null>(null);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+
   const logsQuery = useQuery({
     queryKey: ["logs", timeValue],
     enabled: !!user,
@@ -853,12 +124,40 @@ export default function CodexApp() {
           ? new Date(Date.now() - (100 - timeValue) * 86400000).toISOString()
           : null;
       const url = targetDate
-        ? "/api/logs?before=" + encodeURIComponent(targetDate)
-        : "/api/logs";
+        ? "/api/logs?limit=50&before=" + encodeURIComponent(targetDate)
+        : "/api/logs?limit=50";
       const res = await fetch(url);
       return res.json();
     },
   });
+
+  useEffect(function () {
+    const data = logsQuery.data;
+    if (!data) return;
+    setAllLogs(data.logs || []);
+    setHasMoreLogs(data.hasMore ?? false);
+    const logs = data.logs;
+    setLogsCursor(logs && logs.length > 0 ? logs[logs.length - 1].timestamp : null);
+  }, [logsQuery.data]);
+
+  async function loadMoreLogs() {
+    if (!logsCursor || isLoadingMore) return;
+    setIsLoadingMore(true);
+    try {
+      const res = await fetch("/api/logs?limit=50&before=" + encodeURIComponent(logsCursor));
+      const data = await res.json();
+      const newLogs: Log[] = data.logs || [];
+      setAllLogs(function (prev) { return [...prev, ...newLogs]; });
+      setHasMoreLogs(data.hasMore ?? false);
+      if (newLogs.length > 0) {
+        setLogsCursor(newLogs[newLogs.length - 1].timestamp);
+      } else {
+        setHasMoreLogs(false);
+      }
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }
 
   const widgetsQuery = useQuery({
     queryKey: ["widgets"],
@@ -879,17 +178,17 @@ export default function CodexApp() {
   });
 
   const settingsMutation = useMutation({
-    mutationFn: async function (payload: any) {
-      const res = await fetch("/api/settings", {
+    mutationFn: async function (payload: Partial<UserSettings>) {
+      const res = await fetch(...withCsrf("/api/settings", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
-      });
+      }));
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to save settings");
       return data;
     },
-    onSuccess: function (data) {
+    onSuccess: function (data: { settings?: UserSettings }) {
       queryClient.setQueryData(["settings"], data);
       if (data.settings?.default_widget_sort) {
         setWidgetSort(data.settings.default_widget_sort);
@@ -898,12 +197,12 @@ export default function CodexApp() {
   });
 
   const processMutation = useMutation({
-    mutationFn: async function (payload: any) {
-      const res = await fetch("/api/process", {
+    mutationFn: async function (payload: { rawContent: string; type: string; fileUrl?: string }) {
+      const res = await fetch(...withCsrf("/api/process", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
-      });
+      }));
       if (!res.ok) {
         const data = await res.json();
         throw new Error(data.error || "Processing failed");
@@ -924,7 +223,35 @@ export default function CodexApp() {
     },
   });
 
-  const logsData = logsQuery.data;
+  const [editingWidgetId, setEditingWidgetId] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState("");
+
+  const deleteWidgetMutation = useMutation({
+    mutationFn: async function (widgetId: string) {
+      const res = await fetch(...withCsrf("/api/widgets/" + widgetId, { method: "DELETE" }));
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to delete widget");
+      }
+    },
+    onSuccess: function () { queryClient.invalidateQueries({ queryKey: ["widgets"] }); },
+  });
+
+  const renameWidgetMutation = useMutation({
+    mutationFn: async function ({ widgetId, title }: { widgetId: string; title: string }) {
+      const res = await fetch(...withCsrf("/api/widgets/" + widgetId, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title }),
+      }));
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to rename widget");
+      }
+    },
+    onSuccess: function () { queryClient.invalidateQueries({ queryKey: ["widgets"] }); },
+  });
+
   const widgetsData = widgetsQuery.data;
   const userSettings = (settingsQuery.data && settingsQuery.data.settings) || {};
 
@@ -936,14 +263,14 @@ export default function CodexApp() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settingsQuery.dataUpdatedAt]);
 
-  async function handleSubmit(e?: any) {
+  async function handleSubmit(e?: React.FormEvent) {
     if (e && e.preventDefault) e.preventDefault();
     if (!inputText.trim()) return;
     setIsProcessing(true);
     processMutation.mutate({ rawContent: inputText, type: "text" });
   }
 
-  async function handleFileUpload(e: any) {
+  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files && e.target.files[0];
     if (!file) return;
     e.target.value = "";
@@ -991,13 +318,12 @@ export default function CodexApp() {
   }
 
   function getWidgetData(category: string, type: string) {
-    const allLogs = (logsData && logsData.logs) || [];
-    const logs = allLogs.filter(function (l: any) {
+    const logs = allLogs.filter(function (l: Log) {
       return l.category === category;
     });
     if (type === "chart") {
       return logs
-        .map(function (l: any) {
+        .map(function (l: Log) {
           return {
             date: new Date(l.timestamp).toLocaleDateString(),
             value: (l.entities && l.entities.amount) || 0,
@@ -1006,7 +332,7 @@ export default function CodexApp() {
         .reverse();
     }
     if (type === "list") {
-      return logs.map(function (l: any) {
+      return logs.map(function (l: Log) {
         return {
           text: l.raw_content,
           completed: false,
@@ -1028,25 +354,24 @@ export default function CodexApp() {
     return null;
   }
 
-  const allLogs = (logsData && logsData.logs) || [];
-  const conflicts = allLogs.filter(function (l: any) {
+  const conflicts = allLogs.filter(function (l: Log) {
     return l.is_conflict;
   });
   const filteredLogs = selectedCategory
-    ? allLogs.filter(function (l: any) {
+    ? allLogs.filter(function (l: Log) {
         return l.category === selectedCategory;
       })
     : allLogs;
   const uniqueCategories = Array.from(
     new Set(
-      allLogs.map(function (l: any) {
+      allLogs.map(function (l: Log) {
         return l.category;
       }),
     ),
   ) as string[];
 
   async function handleRevert(logId: string) {
-    const res = await fetch("/api/logs/" + logId, { method: "DELETE" });
+    const res = await fetch(...withCsrf("/api/logs/" + logId, { method: "DELETE" }));
     if (!res.ok) {
       toast.error("Could not revert conflict");
       return;
@@ -1057,11 +382,11 @@ export default function CodexApp() {
   async function handleExport() {
     setIsExporting(true);
     try {
-      const res = await fetch("/api/export", {
+      const res = await fetch(...withCsrf("/api/export", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ range: 30, template: "Executive Summary" }),
-      });
+      }));
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(data.error || "Export failed");
@@ -1098,12 +423,12 @@ export default function CodexApp() {
     );
   }
 
-  const widgets = [...((widgetsData && widgetsData.widgets) || [])].sort(function (a: any, b: any) {
+  const widgets: Widget[] = [...((widgetsData && widgetsData.widgets) || [])].sort(function (a: Widget, b: Widget) {
     if (widgetSort === "title") return a.title.localeCompare(b.title);
     if (widgetSort === "created") return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
     if (widgetSort === "recent") {
       const lastLog = (cat: string) => {
-        const logs = allLogs.filter((l: any) => l.category === cat);
+        const logs = allLogs.filter((l: Log) => l.category === cat);
         return logs.length ? new Date(logs[0].timestamp).getTime() : 0;
       };
       return lastLog(b.config?.category) - lastLog(a.config?.category);
@@ -1187,6 +512,12 @@ export default function CodexApp() {
                     className="flex w-full items-center gap-2.5 px-4 py-3 text-sm text-zinc-400 hover:bg-zinc-900 hover:text-white transition-colors"
                   >
                     <Settings size={14} /> Settings
+                  </button>
+                  <button
+                    onClick={function () { setTheme(theme === 'dark' ? 'light' : 'dark'); setShowUserMenu(false); }}
+                    className="flex w-full items-center gap-2.5 px-4 py-3 text-sm text-zinc-400 hover:bg-zinc-900 hover:text-white transition-colors"
+                  >
+                    {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />} {theme === 'dark' ? 'Light' : 'Dark'} mode
                   </button>
                   <button
                     onClick={async function () {
@@ -1277,7 +608,7 @@ export default function CodexApp() {
                 </div>
               </div>
             ) : null}
-            {widgets.map(function (widget: any) {
+            {widgets.map(function (widget: Widget) {
               const data = getWidgetData(
                 widget.config && widget.config.category,
                 widget.type,
@@ -1287,30 +618,62 @@ export default function CodexApp() {
                 if (cat)
                   window.location.href = "/widget/" + encodeURIComponent(cat);
               };
+              const chartData = (data || []) as Array<{ date: string; value: number }>;
+              const listData = (data || []) as Array<{ text: string; completed: boolean; date: string }>;
+              const metricData = data as { value?: number; unit?: string; sentiment?: string } | null;
+              const isEditing = editingWidgetId === widget.id;
               return (
-                <div key={widget.id} className="break-inside-avoid">
+                <div key={widget.id} className="break-inside-avoid group relative">
+                  <div className="absolute top-2 right-2 z-10 hidden group-hover:flex items-center gap-1">
+                    {isEditing ? (
+                      <form
+                        onSubmit={async function (e) {
+                          e.preventDefault();
+                          if (editingTitle.trim()) {
+                            await renameWidgetMutation.mutateAsync({ widgetId: widget.id, title: editingTitle.trim() });
+                          }
+                          setEditingWidgetId(null);
+                        }}
+                        className="flex items-center gap-1"
+                      >
+                        <input
+                          value={editingTitle}
+                          onChange={function (e) { setEditingTitle(e.target.value); }}
+                          className="w-28 rounded-lg border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-white outline-none"
+                          autoFocus
+                        />
+                        <button type="submit" className="rounded-lg bg-blue-600 px-2 py-1 text-[10px] font-bold text-white">Save</button>
+                        <button type="button" onClick={function () { setEditingWidgetId(null); }} className="rounded-lg bg-zinc-800 px-2 py-1 text-[10px] text-zinc-400">Cancel</button>
+                      </form>
+                    ) : (
+                      <>
+                        <button
+                          onClick={function () { setEditingWidgetId(widget.id); setEditingTitle(widget.title); }}
+                          className="rounded-lg bg-zinc-800/80 p-1.5 text-zinc-500 hover:bg-zinc-700 hover:text-white transition-colors"
+                        >
+                          <Pencil size={12} />
+                        </button>
+                        <button
+                          onClick={async function () {
+                            if (confirm('Delete "' + widget.title + '" widget?')) {
+                              await deleteWidgetMutation.mutateAsync(widget.id);
+                            }
+                          }}
+                          className="rounded-lg bg-zinc-800/80 p-1.5 text-zinc-500 hover:bg-red-600 hover:text-white transition-colors"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </>
+                    )}
+                  </div>
                   {widget.type === "chart" ? (
-                    <ChartWidget
-                      title={widget.title}
-                      data={data || []}
-                      onClick={handleClick}
-                    />
+                    <ChartWidget title={widget.title} data={chartData} onClick={handleClick} />
                   ) : null}
                   {widget.type === "list" ? (
-                    <ListWidget
-                      title={widget.title}
-                      items={data || []}
-                      onClick={handleClick}
-                    />
+                    <ListWidget title={widget.title} items={listData} onClick={handleClick} />
                   ) : null}
                   {widget.type === "metric" ? (
-                    <MetricCard
-                      title={widget.title}
-                      value={data && data.value}
-                      unit={data && data.unit}
-                      sentiment={data && data.sentiment}
-                      onClick={handleClick}
-                    />
+                    <MetricCard title={widget.title} value={metricData?.value} unit={metricData?.unit} sentiment={metricData?.sentiment} onClick={handleClick} />
                   ) : null}
                 </div>
               );
@@ -1408,7 +771,7 @@ export default function CodexApp() {
                   </div>
                 ) : null}
                 <AnimatePresence initial={false}>
-                  {filteredLogs.map(function (log: any) {
+                  {filteredLogs.map(function (log: Log) {
                     return (
                       <LogFeedItem
                         key={log.id}
@@ -1421,6 +784,15 @@ export default function CodexApp() {
                     );
                   })}
                 </AnimatePresence>
+                {hasMoreLogs ? (
+                  <button
+                    onClick={loadMoreLogs}
+                    disabled={isLoadingMore}
+                    className="w-full rounded-xl border border-zinc-800 bg-zinc-900/60 py-2.5 text-xs font-bold uppercase tracking-widest text-zinc-500 transition-all hover:border-zinc-700 hover:text-zinc-300 disabled:opacity-40"
+                  >
+                    {isLoadingMore ? "Loading…" : "Load more"}
+                  </button>
+                ) : null}
               </div>
             </motion.aside>
           )}
@@ -1562,7 +934,7 @@ export default function CodexApp() {
                   No active conflicts.
                 </p>
               ) : null}
-              {conflicts.map(function (log: any) {
+              {conflicts.map(function (log: Log) {
                 return (
                   <div
                     key={log.id}
@@ -1583,7 +955,7 @@ export default function CodexApp() {
                       </p>
                       {log.conflict_source_id ? (
                         (() => {
-                          const src = allLogs.find((l: any) => l.id === log.conflict_source_id);
+                          const src = allLogs.find((l: Log) => l.id === log.conflict_source_id);
                           return src ? (
                             <p className="text-[11px] text-zinc-500 leading-relaxed border-t border-zinc-800 pt-1.5 mt-1">
                               Earlier entry: &ldquo;{src.raw_content.slice(0, 80)}{src.raw_content.length > 80 ? "..." : ""}&rdquo;
@@ -1649,7 +1021,7 @@ export default function CodexApp() {
             data_retention_days: 90,
             ...userSettings,
           }}
-          onSave={async (s: any) => { await settingsMutation.mutateAsync(s); }}
+          onSave={async (s: Partial<UserSettings>) => { await settingsMutation.mutateAsync(s); }}
           onClose={() => setShowSettings(false)}
         />
       ) : null}

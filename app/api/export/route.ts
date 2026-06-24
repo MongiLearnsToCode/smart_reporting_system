@@ -1,7 +1,7 @@
 import { createClient } from '@/utils/supabase/server';
 import { createAdminClient } from '@/utils/supabase/admin';
 import { NextRequest, NextResponse } from 'next/server';
-import { assertSameOrigin, getClientIp, rateLimit, toErrorResponse } from '@/utils/api/guards';
+import { assertSameOrigin, getClientIp, rateLimit, requireCsrf, toErrorResponse } from '@/utils/api/guards';
 import { callGroq } from '@/utils/api/groq';
 import { escapeHtml, safeFilenamePart } from '@/utils/api/html';
 import { parseExportPayload } from '@/utils/api/validation';
@@ -9,7 +9,8 @@ import { parseExportPayload } from '@/utils/api/validation';
 export async function POST(request: NextRequest) {
   try {
     assertSameOrigin(request);
-    rateLimit(`export:${getClientIp(request)}`, { limit: 10, windowMs: 60_000 });
+    requireCsrf(request);
+    await rateLimit(`export:${getClientIp(request)}`, { limit: 10, windowMs: 60_000 });
 
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
@@ -71,7 +72,7 @@ export async function POST(request: NextRequest) {
         'Content-Disposition': `attachment; filename="Codex_Report_${safeFilenamePart(template)}.html"`,
       },
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('api/export error:', error);
     return toErrorResponse(error);
   }

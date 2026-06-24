@@ -1,14 +1,15 @@
 import { createClient } from '@/utils/supabase/server';
 import { createAdminClient } from '@/utils/supabase/admin';
 import { NextRequest, NextResponse } from 'next/server';
-import { assertSameOrigin, getClientIp, rateLimit, toErrorResponse } from '@/utils/api/guards';
+import { assertSameOrigin, getClientIp, rateLimit, requireCsrf, toErrorResponse } from '@/utils/api/guards';
 import { callGroq, extractJson } from '@/utils/api/groq';
 import { parseProcessPayload } from '@/utils/api/validation';
 
 export async function POST(request: NextRequest) {
   try {
     assertSameOrigin(request);
-    rateLimit(`process:${getClientIp(request)}`, { limit: 20, windowMs: 60_000 });
+    requireCsrf(request);
+    await rateLimit(`process:${getClientIp(request)}`, { limit: 20, windowMs: 60_000 });
 
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
@@ -60,7 +61,7 @@ export async function POST(request: NextRequest) {
       .or(`user_id.eq.${userId},user_id.eq.system`);
 
     const catExists = existingCats?.some(
-      (c: any) => c.name.toLowerCase() === extracted.category.toLowerCase()
+      (c: { name: string }) => c.name.toLowerCase() === extracted.category.toLowerCase()
     );
 
     if (!catExists) {
@@ -86,7 +87,7 @@ export async function POST(request: NextRequest) {
     let conflictReason: string | null = null;
 
     if (conflictDetection && recentLogs && recentLogs.length > 0) {
-      const comparisons = recentLogs.map((l: any, i: number) => `[${i + 1}] ${l.raw_content}`).join('\n\n');
+      const comparisons = recentLogs.map((l: { raw_content: string }, i: number) => `[${i + 1}] ${l.raw_content}`).join('\n\n');
       const similarityPrompt = `You are a duplicate-detection assistant. Compare the NEW entry against each EXISTING entry and return ONLY valid JSON.
 
 NEW ENTRY:
@@ -156,7 +157,7 @@ Return: { "duplicate": boolean, "source_index": number | null, "reason": string 
     }
 
     return NextResponse.json({ success: true, log: savedLog });
-  } catch (error: any) {
+  } catch (error) {
     console.error('api/process error:', error);
     if (error instanceof Error && /required|too long/.test(error.message)) {
       return NextResponse.json({ error: error.message }, { status: 400 });

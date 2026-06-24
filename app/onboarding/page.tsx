@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
   Briefcase,
@@ -10,6 +10,7 @@ import {
   Globe,
   MessageSquare,
 } from "lucide-react";
+import { ensureCsrfToken, withCsrf } from "@/utils/api/csrf";
 
 const OPTIONS = [
   { id: "solo", label: "Solo Founder", icon: Briefcase, color: "bg-blue-500" },
@@ -43,15 +44,17 @@ const OPTIONS = [
 export default function Onboarding() {
   const [loading, setLoading] = useState(false);
 
+  useEffect(function () { ensureCsrfToken(); }, []);
+
   const handleSelect = async (option: string) => {
     setLoading(true);
     try {
       // Seed initial widgets based on industry
-      await fetch("/api/widgets/seed", {
+      await fetch(...withCsrf("/api/widgets/seed", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ industry: option }),
-      });
+      }));
       window.location.href = "/"; // Use standard navigation
     } catch (error) {
       console.error(error);

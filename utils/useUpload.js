@@ -1,7 +1,14 @@
 import * as React from 'react';
+import { getCsrfToken } from './api/csrf';
 
 function useUpload() {
   const [loading, setLoading] = React.useState(false);
+
+  function csrfHeaders() {
+    const token = getCsrfToken();
+    return token ? { 'x-csrf-token': token } : {};
+  }
+
   const upload = React.useCallback(async (input) => {
     try {
       setLoading(true);
@@ -11,6 +18,7 @@ function useUpload() {
         formData.append("file", input.file);
         response = await fetch("/api/upload", {
           method: "POST",
+          headers: csrfHeaders(),
           body: formData
         });
       } else if ("url" in input) {

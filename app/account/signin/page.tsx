@@ -32,7 +32,7 @@ export default function SignInPage() {
         callbackUrl: "/",
         redirect: true,
       });
-    } catch (err: any) {
+    } catch (err) {
       const errorMessages: Record<string, string> = {
         OAuthSignin:
           "Couldn't start sign-in. Please try again or use a different method.",
@@ -40,8 +40,9 @@ export default function SignInPage() {
         CredentialsSignin:
           "Incorrect email or password. Try again or reset your password.",
       };
+      const msg = err instanceof Error ? err.message : String(err);
       setError(
-        errorMessages[err.message] || err.message || "Something went wrong. Please try again.",
+        errorMessages[msg] || msg || "Something went wrong. Please try again.",
       );
       setLoading(false);
     }

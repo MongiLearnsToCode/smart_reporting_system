@@ -17,10 +17,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
-      <head>
-        <script src="https://kit.fontawesome.com/2c15cc0cc7.js" crossOrigin="anonymous" async />
-      </head>
+    <html lang="en" suppressHydrationWarning>
+      <head />
       <body className={inter.className}>
         <Providers>
           {children}

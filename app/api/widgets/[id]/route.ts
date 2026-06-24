@@ -3,29 +3,7 @@ import { createAdminClient } from '@/utils/supabase/admin';
 import { NextRequest, NextResponse } from 'next/server';
 import { assertSameOrigin, getClientIp, rateLimit, requireCsrf, toErrorResponse } from '@/utils/api/guards';
 
-export async function GET(request: NextRequest) {
-  try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const admin = createAdminClient();
-    const { data: widgets, error } = await admin
-      .from('widgets')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('id', { ascending: true });
-
-    if (error) throw error;
-    return NextResponse.json({ widgets });
-  } catch (error) {
-    return toErrorResponse(error);
-  }
-}
-
-export async function POST(request: NextRequest) {
+export async function DELETE(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     assertSameOrigin(request);
     requireCsrf(request);
@@ -37,21 +15,54 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const { id } = await params;
     const admin = createAdminClient();
-    const body = await request.json();
-    const type = body?.type === 'chart' || body?.type === 'list' ? body.type : 'metric';
-    const title = typeof body?.title === 'string' ? body.title.trim().slice(0, 80) : '';
-    const config = body?.config && typeof body.config === 'object' && !Array.isArray(body.config)
-      ? body.config
-      : {};
+    const { error } = await admin
+      .from('widgets')
+      .delete()
+      .eq('id', id)
+      .eq('user_id', user.id);
 
-    if (!title) {
-      return NextResponse.json({ error: 'Widget title is required' }, { status: 400 });
+    if (error) throw error;
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    return toErrorResponse(error);
+  }
+}
+
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    assertSameOrigin(request);
+    requireCsrf(request);
+    await rateLimit(`widgets:${getClientIp(request)}`, { limit: 30, windowMs: 60_000 });
+
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const { id } = await params;
+    const body = await request.json();
+    const updates: Record<string, unknown> = {};
+
+    if (typeof body.title === 'string' && body.title.trim()) {
+      updates.title = body.title.trim().slice(0, 80);
+    }
+    if (body.config && typeof body.config === 'object') {
+      updates.config = body.config;
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return NextResponse.json({ error: 'No valid fields to update' }, { status: 400 });
+    }
+
+    const admin = createAdminClient();
     const { data: widget, error } = await admin
       .from('widgets')
-      .insert({ user_id: user.id, type, title, config })
+      .update(updates)
+      .eq('id', id)
+      .eq('user_id', user.id)
       .select()
       .single();
 

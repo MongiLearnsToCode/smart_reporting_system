@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
 
     if (error) throw error;
     return NextResponse.json({ categories });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Request failed' }, { status: 500 });
   }
 }

@@ -1,12 +1,13 @@
 import { createClient } from '@/utils/supabase/server';
 import { createAdminClient } from '@/utils/supabase/admin';
 import { NextRequest, NextResponse } from 'next/server';
-import { assertSameOrigin, toErrorResponse } from '@/utils/api/guards';
+import { assertSameOrigin, requireCsrf, toErrorResponse } from '@/utils/api/guards';
 import { parseIndustry } from '@/utils/api/validation';
 
 export async function POST(request: NextRequest) {
   try {
     assertSameOrigin(request);
+    requireCsrf(request);
 
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
@@ -49,7 +50,7 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({ success: true });
-  } catch (error: any) {
+  } catch (error) {
     return toErrorResponse(error);
   }
 }
