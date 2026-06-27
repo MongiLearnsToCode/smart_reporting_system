@@ -788,7 +788,7 @@ export default function CodexApp() {
                   <button
                     onClick={loadMoreLogs}
                     disabled={isLoadingMore}
-                    className="w-full rounded-xl border border-zinc-800 bg-zinc-900/60 py-2.5 text-xs font-bold uppercase tracking-widest text-zinc-500 transition-all hover:border-zinc-700 hover:text-zinc-300 disabled:opacity-40"
+                    className="w-full rounded-xl border border-zinc-800 bg-zinc-900 py-2.5 text-xs font-bold uppercase tracking-widest text-zinc-500 transition-all hover:border-zinc-700 hover:text-zinc-300 disabled:opacity-40"
                   >
                     {isLoadingMore ? "Loading…" : "Load more"}
                   </button>

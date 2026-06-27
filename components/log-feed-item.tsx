@@ -33,7 +33,7 @@ export function LogFeedItem({ log, onClick, allLogs }: {
       initial={{ opacity: 0, x: 12 }}
       animate={{ opacity: 1, x: 0 }}
       onClick={onClick}
-      className="group w-full text-left rounded-2xl border border-zinc-800/80 bg-zinc-900/60 p-4 hover:border-zinc-700 hover:bg-zinc-900 transition-all"
+      className="group w-full text-left rounded-2xl border border-zinc-800 bg-zinc-900 p-4 hover:border-zinc-700 hover:bg-zinc-800/80 transition-all"
     >
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
