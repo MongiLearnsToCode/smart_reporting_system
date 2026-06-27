@@ -57,10 +57,10 @@ import { withCsrf, ensureCsrfToken } from "@/utils/api/csrf";
 import { MetricCard } from "@/components/metric-card";
 import { ChartWidget } from "@/components/chart-widget";
 import { ListWidget } from "@/components/list-widget";
-import { FilePreviewModal } from "@/components/file-preview-modal";
 import { LogPreviewModal } from "@/components/log-preview-modal";
 import { LogFeedItem } from "@/components/log-feed-item";
 import { SettingsModal } from "@/components/settings-modal";
+import { Composer } from "@/components/composer";
 import { getCat } from "@/lib/categories";
 import { formatTimeAgo, type Log, type Entities, type Widget, type UserSettings } from "@/lib/dashboard-utils";
 
@@ -82,8 +82,8 @@ export default function CodexApp() {
   const [showConflicts, setShowConflicts] = useState(false);
   const [isLogFeedPinned, setIsLogFeedPinned] = useState(true);
   const [showUserMenu, setShowUserMenu] = useState(false);
-  const [previewFile, setPreviewFile] = useState<File | null>(null);
-  const [showFilePreview, setShowFilePreview] = useState(false);
+  const [files, setFiles] = useState<File[]>([]);
+  const abortRef = useRef<AbortController | null>(null);
   const [widgetSort, setWidgetSort] = useState<"title" | "created" | "recent">("title");
   const [showSettings, setShowSettings] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
@@ -198,10 +198,13 @@ export default function CodexApp() {
 
   const processMutation = useMutation({
     mutationFn: async function (payload: { rawContent: string; type: string; fileUrl?: string }) {
+      const controller = new AbortController();
+      abortRef.current = controller;
       const res = await fetch(...withCsrf("/api/process", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
+        signal: controller.signal,
       }));
       if (!res.ok) {
         const data = await res.json();
@@ -213,13 +216,11 @@ export default function CodexApp() {
       queryClient.invalidateQueries({ queryKey: ["logs"] });
       queryClient.invalidateQueries({ queryKey: ["widgets"] });
       queryClient.invalidateQueries({ queryKey: ["categories"] });
-      setInputText("");
-      setIsProcessing(false);
     },
     onError: function (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
       console.error("Process error:", err);
       toast.error(err instanceof Error ? err.message : "Processing failed");
-      setIsProcessing(false);
     },
   });
 
@@ -263,58 +264,72 @@ export default function CodexApp() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settingsQuery.dataUpdatedAt]);
 
-  async function handleSubmit(e?: React.FormEvent) {
-    if (e && e.preventDefault) e.preventDefault();
-    if (!inputText.trim()) return;
-    setIsProcessing(true);
-    processMutation.mutate({ rawContent: inputText, type: "text" });
+  function handleFilesAdded(newFiles: File[]) {
+    setFiles(function (prev) { return [...prev, ...newFiles]; });
   }
 
-  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files && e.target.files[0];
-    if (!file) return;
-    e.target.value = "";
-    setPreviewFile(file);
+  function handleFileRemove(index: number) {
+    setFiles(function (prev) { return prev.filter(function (_, i) { return i !== index; }); });
+  }
+
+  function handleStop() {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    setIsProcessing(false);
+  }
+
+  async function handleSubmit(e?: React.FormEvent) {
+    if (e && e.preventDefault) e.preventDefault();
+    if (!inputText.trim() && files.length === 0) return;
     setIsProcessing(true);
-    let fileText = "";
-    const isTextBased =
-      file.type.includes("text") ||
-      file.name.endsWith(".csv") ||
-      file.name.endsWith(".txt");
-    if (isTextBased && file.size < 500000) {
-      try {
-        const t = await file.text();
-        fileText = t.slice(0, 4000);
-      } catch (_) {
-        fileText = "";
+
+    try {
+      if (inputText.trim()) {
+        await processMutation.mutateAsync({ rawContent: inputText, type: "text" });
       }
-    }
-    const rawContent = fileText
-      ? "File: " + file.name + "\n\n" + fileText
-      : "Uploaded file: " +
-        file.name +
-        " (" +
-        (file.size / 1024).toFixed(1) +
-        "KB)";
 
-    if (!rawContent.trim()) {
+      for (const file of files) {
+        let fileText = "";
+        const isTextBased =
+          file.type.includes("text") ||
+          file.name.endsWith(".csv") ||
+          file.name.endsWith(".txt");
+        if (isTextBased && file.size < 500000) {
+          try {
+            const t = await file.text();
+            fileText = t.slice(0, 4000);
+          } catch (_) {
+            fileText = "";
+          }
+        }
+        const rawContent = fileText
+          ? "File: " + file.name + "\n\n" + fileText
+          : "Uploaded file: " +
+            file.name +
+            " (" +
+            (file.size / 1024).toFixed(1) +
+            "KB)";
+
+        const uploadResult = await upload({ file });
+        if (!uploadResult || "error" in uploadResult) {
+          toast.error(uploadResult?.error || "Upload failed for " + file.name);
+          continue;
+        }
+        await processMutation.mutateAsync({
+          rawContent: rawContent,
+          type: "file",
+          fileUrl: uploadResult.url,
+        });
+      }
+
+      setInputText("");
+      setFiles([]);
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
+      toast.error(err instanceof Error ? err.message : "Processing failed");
+    } finally {
       setIsProcessing(false);
-      return;
     }
-
-    const uploadResult = await upload({ file });
-    if (!uploadResult || "error" in uploadResult) {
-      setIsProcessing(false);
-      toast.error(uploadResult?.error || "Upload failed");
-      return;
-    }
-    const fileUrl = uploadResult.url;
-
-    processMutation.mutate({
-      rawContent: rawContent,
-      type: "file",
-      fileUrl,
-    });
   }
 
   function getWidgetData(category: string, type: string) {
@@ -833,77 +848,16 @@ export default function CodexApp() {
             ) : null}
           </AnimatePresence>
 
-          {previewFile ? (
-            <div className="flex items-center gap-2 self-start rounded-full border border-zinc-800 bg-zinc-900 px-3 py-1.5">
-              <FileText size={12} className="text-zinc-400" />
-              <button
-                type="button"
-                onClick={() => setShowFilePreview(true)}
-                className="text-xs font-bold text-zinc-300 hover:text-white transition-colors max-w-[200px] truncate"
-              >
-                {previewFile.name}
-              </button>
-              <button
-                type="button"
-                onClick={() => setPreviewFile(null)}
-                className="text-zinc-600 hover:text-white transition-colors"
-              >
-                <X size={12} />
-              </button>
-            </div>
-          ) : null}
-
-          <form
+          <Composer
+            value={inputText}
+            onChange={setInputText}
             onSubmit={handleSubmit}
-            className="group relative flex w-full flex-col overflow-hidden rounded-[28px] border border-zinc-800 bg-zinc-950/95 shadow-2xl backdrop-blur-xl transition-all focus-within:border-zinc-700 focus-within:ring-4 focus-within:ring-white/5"
-          >
-            <textarea
-              ref={inputRef}
-              value={inputText}
-              onChange={function (e) {
-                setInputText(e.target.value);
-              }}
-              onKeyDown={function (e) {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSubmit();
-                }
-              }}
-              placeholder="Log an expense, project update, client note..."
-              className="w-full resize-none bg-transparent px-6 py-5 text-base font-medium text-white placeholder-zinc-600 outline-none max-h-[160px]"
-              rows={1}
-            />
-            <div className="flex h-12 items-center justify-between border-t border-zinc-800/50 bg-zinc-900/40 px-5">
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  className="p-1.5 text-zinc-600 transition-colors hover:text-white rounded-xl hover:bg-zinc-800"
-                >
-                  <Mic size={18} />
-                </button>
-                <label className="cursor-pointer p-1.5 text-zinc-600 transition-colors hover:text-white rounded-xl hover:bg-zinc-800">
-                  <FileUp size={18} />
-                  <input
-                    type="file"
-                    className="hidden"
-                    onChange={handleFileUpload}
-                    accept=".csv,.txt,.pdf,.xlsx"
-                  />
-                </label>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="hidden sm:block text-[10px] text-zinc-700">
-                  Enter to send
-                </span>
-                <button
-                  disabled={!inputText.trim() || isProcessing}
-                  className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-black shadow-lg transition-all hover:scale-110 active:scale-95 disabled:bg-zinc-800 disabled:text-zinc-600 disabled:hover:scale-100"
-                >
-                  <Send size={15} fill="currentColor" />
-                </button>
-              </div>
-            </div>
-          </form>
+            files={files}
+            onFilesAdded={handleFilesAdded}
+            onFileRemove={handleFileRemove}
+            isProcessing={isProcessing}
+            onStop={handleStop}
+          />
         </div>
       </div>
 
@@ -999,12 +953,6 @@ export default function CodexApp() {
               setPreviewLog(null);
             }}
           />
-        ) : null}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {showFilePreview && previewFile ? (
-          <FilePreviewModal file={previewFile} onClose={() => setShowFilePreview(false)} />
         ) : null}
       </AnimatePresence>
 
