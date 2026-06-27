@@ -29,7 +29,7 @@ export function ChartWidget({ title, data, type, onClick }: {
         />
       </div>
       <div className="h-[200px]">
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer width="100%" height="100%" minWidth={0}>
           {chartType === "line" ? (
             <LineChart data={data}>
               <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} />
