@@ -148,7 +148,7 @@ export function Composer({
           onKeyDown={handleKeyDown}
           onPaste={handlePaste}
           placeholder="Log an expense, project update, client note..."
-          className="w-full resize-none bg-transparent px-6 py-5 text-base font-medium text-white placeholder-zinc-600 outline-none max-h-[160px]"
+          className="w-full resize-none appearance-none border-0 bg-transparent px-6 py-5 text-base font-medium text-white placeholder-zinc-600 outline-none ring-0 focus:ring-0 focus:outline-none max-h-[160px]"
           rows={1}
           disabled={disabled}
         />
