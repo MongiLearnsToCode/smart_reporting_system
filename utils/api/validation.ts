@@ -62,6 +62,16 @@ export function parseExportPayload(input: unknown) {
   return { range, template };
 }
 
+export function parseReportPayload(input: unknown) {
+  const body = input && typeof input === 'object' ? input as Record<string, unknown> : {};
+  const days = intInRange(body.days, 7, 1, 365);
+  const client = typeof body.client === 'string' && body.client.trim()
+    ? body.client.trim().slice(0, 80)
+    : null;
+
+  return { days, client };
+}
+
 export function parseIndustry(input: unknown) {
   const body = input && typeof input === 'object' ? input as Record<string, unknown> : {};
   return isOneOf(body.industry, ['solo', 'freelance', 'consultant', 'retail', 'creative', 'dev'] as const)

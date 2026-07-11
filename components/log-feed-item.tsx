@@ -45,6 +45,11 @@ export function LogFeedItem({ log, onClick, allLogs }: {
           >
             {log.category}
           </span>
+          {log.entities?.client ? (
+            <span className="max-w-[90px] truncate rounded-full border border-zinc-700 px-1.5 py-px text-[9px] font-bold text-zinc-400">
+              {log.entities.client}
+            </span>
+          ) : null}
           {log.type === "file" ? (
             <FileText size={10} className="text-zinc-600" />
           ) : null}

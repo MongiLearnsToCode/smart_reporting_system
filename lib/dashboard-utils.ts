@@ -33,9 +33,20 @@ export type Entities = {
   date?: string;
   sentiment?: string;
   urgency?: string;
+  client?: string | null;
   names?: string[];
   tags?: string[];
 };
+
+/** Distinct client names from a set of logs, most recent first. */
+export function uniqueClients(logs: Log[]): string[] {
+  const seen = new Set<string>();
+  for (const log of logs) {
+    const client = log.entities?.client;
+    if (typeof client === "string" && client.trim()) seen.add(client.trim());
+  }
+  return Array.from(seen);
+}
 
 export type Widget = {
   id: string;

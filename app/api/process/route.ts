@@ -30,8 +30,22 @@ export async function POST(request: NextRequest) {
     const conflictDetection = settings.conflict_detection !== false;
     const conflictDismissDays = settings.conflict_dismiss_days ?? 7;
 
+    // Known clients for normalization: dedupe entities->client from recent logs
+    const { data: clientRows } = await admin
+      .from('logs')
+      .select('entities->client')
+      .eq('user_id', userId)
+      .not('entities->client', 'is', null)
+      .order('timestamp', { ascending: false })
+      .limit(200);
+    const knownClients = Array.from(new Set(
+      (clientRows ?? [])
+        .map((r: { client: unknown }) => (typeof r.client === 'string' ? r.client.trim() : ''))
+        .filter(Boolean),
+    ));
+
     const systemPrompt = [
-      'You are an AI data extractor for Codex, a business intelligence platform.',
+      'You are an AI data extractor for Codex, a reporting platform for consultants and agencies.',
       'Extract structured data from the user log entry and return ONLY valid JSON with no markdown, no code blocks, and no explanation.',
       'Choose from these categories: Finance, Inventory, Projects, Clients, Tasks, Team, Marketing.',
       'If none fit, propose a short new category name.',
@@ -40,8 +54,12 @@ export async function POST(request: NextRequest) {
       `Write the summary in ${aiLanguage}.`,
       'Detect sentiment as: positive, neutral, or negative.',
       'Detect urgency as: low, medium, or high.',
+      'Identify which client (customer/account the work or money relates to) this entry is for, if any.',
+      knownClients.length
+        ? `Known clients: ${knownClients.join(', ')}. If the entry refers to one of these (even loosely, e.g. an abbreviation), use the EXACT known spelling. Only introduce a new client name if it clearly is not one of the known clients.`
+        : 'If the entry names a client/customer the work is for, extract that name; otherwise use null.',
       'Return this exact JSON structure:',
-      '{ "category": "string", "summary": "one sentence summary", "entities": { "amount": number or null, "currency": "string or null", "date": "ISO date string", "sentiment": "positive or neutral or negative", "urgency": "low or medium or high", "names": ["array of person or company names"], "tags": ["array of relevant keywords"] } }',
+      '{ "category": "string", "summary": "one sentence summary", "entities": { "amount": number or null, "currency": "string or null", "date": "ISO date string", "sentiment": "positive or neutral or negative", "urgency": "low or medium or high", "client": "string or null", "names": ["array of person or company names"], "tags": ["array of relevant keywords"] } }',
     ].join('\n');
 
     const messageContent = await callGroq([

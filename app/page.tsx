@@ -8,30 +8,18 @@ import {
 } from "@/utils/client-integrations/shadcn-ui";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  Send,
-  Mic,
-  FileUp,
   History,
-  Download,
   AlertCircle,
-  TrendingUp,
   Users,
   Package,
   MessageSquare,
   Clock,
-  Maximize2,
   X,
   AlertTriangle,
   RotateCcw,
   FileText,
-  DollarSign,
-  Tag,
-  Calendar,
   User,
-  Zap,
-  ChevronRight,
   ScrollText,
-  Pin,
   PinOff,
   LogOut, Sun, Moon, Trash2, Pencil,
   ArrowUpDown,
@@ -53,7 +41,7 @@ import useUpload from "@/utils/useUpload";
 import useUser from "@/utils/useUser";
 import { toast } from "sonner";
 import { useTheme } from "next-themes";
-import { withCsrf, ensureCsrfToken } from "@/utils/api/csrf";
+import { csrfFetch, ensureCsrfToken } from "@/utils/api/csrf";
 import { MetricCard } from "@/components/metric-card";
 import { ChartWidget } from "@/components/chart-widget";
 import { ListWidget } from "@/components/list-widget";
@@ -62,7 +50,8 @@ import { LogFeedItem } from "@/components/log-feed-item";
 import { SettingsModal } from "@/components/settings-modal";
 import { Composer } from "@/components/composer";
 import { getCat } from "@/lib/categories";
-import { formatTimeAgo, type Log, type Entities, type Widget, type UserSettings } from "@/lib/dashboard-utils";
+import { formatTimeAgo, uniqueClients, type Log, type Entities, type Widget, type UserSettings } from "@/lib/dashboard-utils";
+import { ReportsModal } from "@/components/reports-modal";
 
 export default function CodexApp() {
   const queryClient = useQueryClient();
@@ -78,6 +67,8 @@ export default function CodexApp() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [timeValue, setTimeValue] = useState(100);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [selectedClient, setSelectedClient] = useState<string | null>(null);
+  const [showReports, setShowReports] = useState(false);
   const [previewLog, setPreviewLog] = useState<Log | null>(null);
   const [showConflicts, setShowConflicts] = useState(false);
   const [isLogFeedPinned, setIsLogFeedPinned] = useState(true);
@@ -86,7 +77,6 @@ export default function CodexApp() {
   const abortRef = useRef<AbortController | null>(null);
   const [widgetSort, setWidgetSort] = useState<"title" | "created" | "recent">("title");
   const [showSettings, setShowSettings] = useState(false);
-  const [isExporting, setIsExporting] = useState(false);
   const { theme, setTheme } = useTheme();
   const userMenuRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -179,11 +169,11 @@ export default function CodexApp() {
 
   const settingsMutation = useMutation({
     mutationFn: async function (payload: Partial<UserSettings>) {
-      const res = await fetch(...withCsrf("/api/settings", {
+      const res = await csrfFetch("/api/settings", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
-      }));
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to save settings");
       return data;
@@ -200,12 +190,12 @@ export default function CodexApp() {
     mutationFn: async function (payload: { rawContent: string; type: string; fileUrl?: string }) {
       const controller = new AbortController();
       abortRef.current = controller;
-      const res = await fetch(...withCsrf("/api/process", {
+      const res = await csrfFetch("/api/process", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
         signal: controller.signal,
-      }));
+      });
       if (!res.ok) {
         const data = await res.json();
         throw new Error(data.error || "Processing failed");
@@ -229,7 +219,7 @@ export default function CodexApp() {
 
   const deleteWidgetMutation = useMutation({
     mutationFn: async function (widgetId: string) {
-      const res = await fetch(...withCsrf("/api/widgets/" + widgetId, { method: "DELETE" }));
+      const res = await csrfFetch("/api/widgets/" + widgetId, { method: "DELETE" });
       if (!res.ok) {
         const data = await res.json();
         throw new Error(data.error || "Failed to delete widget");
@@ -240,11 +230,11 @@ export default function CodexApp() {
 
   const renameWidgetMutation = useMutation({
     mutationFn: async function ({ widgetId, title }: { widgetId: string; title: string }) {
-      const res = await fetch(...withCsrf("/api/widgets/" + widgetId, {
+      const res = await csrfFetch("/api/widgets/" + widgetId, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title }),
-      }));
+      });
       if (!res.ok) {
         const data = await res.json();
         throw new Error(data.error || "Failed to rename widget");
@@ -372,11 +362,11 @@ export default function CodexApp() {
   const conflicts = allLogs.filter(function (l: Log) {
     return l.is_conflict;
   });
-  const filteredLogs = selectedCategory
-    ? allLogs.filter(function (l: Log) {
-        return l.category === selectedCategory;
-      })
-    : allLogs;
+  const filteredLogs = allLogs.filter(function (l: Log) {
+    if (selectedCategory && l.category !== selectedCategory) return false;
+    if (selectedClient && l.entities?.client !== selectedClient) return false;
+    return true;
+  });
   const uniqueCategories = Array.from(
     new Set(
       allLogs.map(function (l: Log) {
@@ -384,43 +374,15 @@ export default function CodexApp() {
       }),
     ),
   ) as string[];
+  const clients = uniqueClients(allLogs);
 
   async function handleRevert(logId: string) {
-    const res = await fetch(...withCsrf("/api/logs/" + logId, { method: "DELETE" }));
+    const res = await csrfFetch("/api/logs/" + logId, { method: "DELETE" });
     if (!res.ok) {
       toast.error("Could not revert conflict");
       return;
     }
     queryClient.invalidateQueries({ queryKey: ["logs"] });
-  }
-
-  async function handleExport() {
-    setIsExporting(true);
-    try {
-      const res = await fetch(...withCsrf("/api/export", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ range: 30, template: "Executive Summary" }),
-      }));
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || "Export failed");
-      }
-
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = "Codex_Report_Executive_Summary.html";
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Export failed");
-    } finally {
-      setIsExporting(false);
-    }
   }
 
   if (userLoading || !user) {
@@ -488,11 +450,10 @@ export default function CodexApp() {
             ) : null}
           </button>
           <button
-            onClick={handleExport}
-            disabled={isExporting}
-            className="hidden sm:flex items-center gap-2 rounded-full border border-zinc-800 bg-zinc-900 px-4 py-1.5 text-xs font-bold transition-all hover:bg-zinc-800 disabled:opacity-50"
+            onClick={function () { setShowReports(true); }}
+            className="hidden sm:flex items-center gap-2 rounded-full border border-zinc-800 bg-white px-4 py-1.5 text-xs font-bold text-black transition-all hover:bg-zinc-200"
           >
-            <Download size={13} /> {isExporting ? "Exporting" : "Export Report"}
+            <FileText size={13} /> Reports
           </button>
           <div className="relative" ref={userMenuRef}>
             <button
@@ -723,10 +684,11 @@ export default function CodexApp() {
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
-                  {selectedCategory ? (
+                  {selectedCategory || selectedClient ? (
                     <button
                       onClick={function () {
                         setSelectedCategory(null);
+                        setSelectedClient(null);
                       }}
                       className="flex items-center gap-1 text-[10px] font-bold text-zinc-500 hover:text-white transition-colors"
                     >
@@ -768,6 +730,31 @@ export default function CodexApp() {
                         }
                       >
                         {cat}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
+
+              {clients.length > 0 ? (
+                <div className="flex gap-1.5 overflow-x-auto px-5 py-2.5 border-b border-zinc-900 items-center">
+                  <User size={10} className="shrink-0 text-zinc-600" />
+                  {clients.map(function (client) {
+                    const active = selectedClient === client;
+                    return (
+                      <button
+                        key={client}
+                        onClick={function () {
+                          setSelectedClient(active ? null : client);
+                        }}
+                        className={
+                          "shrink-0 rounded-full border px-3 py-1 text-[10px] font-bold transition-all " +
+                          (active
+                            ? "border-blue-500/50 bg-blue-500/10 text-blue-400"
+                            : "border-zinc-800 text-zinc-500 hover:border-zinc-700 hover:text-zinc-300")
+                        }
+                      >
+                        {client}
                       </button>
                     );
                   })}
@@ -955,6 +942,10 @@ export default function CodexApp() {
           />
         ) : null}
       </AnimatePresence>
+
+      {showReports ? (
+        <ReportsModal clients={clients} onClose={function () { setShowReports(false); }} />
+      ) : null}
 
       {showSettings ? (
         <SettingsModal
