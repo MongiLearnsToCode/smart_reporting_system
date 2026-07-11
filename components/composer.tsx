@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, useEffect, useCallback } from "react";
-import { Send, Mic, FileUp, Square, X, FileText, Image } from "lucide-react";
+import { ArrowUp, Mic, Plus, FileUp, Square, X, FileText, Image } from "lucide-react";
 
 interface ComposerProps {
   value: string;
@@ -99,42 +99,51 @@ export function Composer({
     }
   };
 
+  // Auto-grow the textarea with content, capped at ~7 lines
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = Math.min(el.scrollHeight, 200) + "px";
+  }, [value]);
+
   return (
     <>
       {isDragging && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-zinc-950/80 backdrop-blur-sm">
-          <div className="rounded-[36px] border-2 border-dashed border-zinc-600 bg-zinc-900/50 px-12 py-10 text-center">
-            <FileUp size={36} className="mx-auto mb-3 text-zinc-400" />
-            <p className="text-sm font-bold text-zinc-300">Drop files here</p>
-            <p className="text-xs text-zinc-600 mt-1">Attach to your log entry</p>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-zinc-950/80">
+          <div className="rounded-2xl border border-dashed border-zinc-600 bg-zinc-900 px-12 py-10 text-center">
+            <FileUp size={32} className="mx-auto mb-3 text-zinc-400" />
+            <p className="text-sm font-medium text-zinc-200">Drop files here</p>
+            <p className="mt-1 text-xs text-zinc-500">Attach to your log entry</p>
           </div>
         </div>
       )}
 
       <form
         onSubmit={onSubmit}
-        className="group relative flex w-full flex-col overflow-hidden rounded-[28px] border border-zinc-800 bg-zinc-950/95 shadow-2xl backdrop-blur-xl transition-all focus-within:border-zinc-700 focus-within:ring-4 focus-within:ring-white/5"
+        className="relative flex w-full flex-col rounded-[26px] border border-zinc-800 bg-zinc-900 transition-colors focus-within:border-zinc-600"
       >
         {files.length > 0 && (
-          <div className="flex gap-2 overflow-x-auto px-5 pt-3 pb-1">
+          <div className="flex gap-2 overflow-x-auto px-4 pt-3">
             {files.map((file, i) => (
               <div
                 key={i}
-                className="flex items-center gap-1.5 shrink-0 rounded-full border border-zinc-700/50 bg-zinc-800/50 px-3 py-1.5"
+                className="group/chip flex shrink-0 items-center gap-2 rounded-xl border border-zinc-800 bg-zinc-800/60 py-1.5 pl-2 pr-2.5"
               >
-                {file.type.startsWith("image/") ? (
-                  <Image size={12} className="text-zinc-400" />
-                ) : (
-                  <FileText size={12} className="text-zinc-400" />
-                )}
-                <span className="max-w-[120px] truncate text-xs text-zinc-300">{file.name}</span>
-                <span className="text-[10px] text-zinc-500">{formatSize(file.size)}</span>
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-zinc-700/60 text-zinc-300">
+                  {file.type.startsWith("image/") ? <Image size={13} /> : <FileText size={13} />}
+                </div>
+                <div className="flex flex-col leading-tight">
+                  <span className="max-w-[130px] truncate text-xs font-medium text-zinc-200">{file.name}</span>
+                  <span className="text-[10px] text-zinc-500">{formatSize(file.size)}</span>
+                </div>
                 <button
                   type="button"
                   onClick={() => onFileRemove(i)}
-                  className="ml-0.5 text-zinc-500 hover:text-white transition-colors"
+                  aria-label={`Remove ${file.name}`}
+                  className="ml-1 rounded-full p-0.5 text-zinc-500 transition-colors hover:bg-zinc-700 hover:text-white"
                 >
-                  <X size={12} />
+                  <X size={13} />
                 </button>
               </div>
             ))}
@@ -148,49 +157,55 @@ export function Composer({
           onKeyDown={handleKeyDown}
           onPaste={handlePaste}
           placeholder="Log an expense, project update, client note..."
-          className="w-full resize-none appearance-none border-0 bg-transparent px-6 py-5 text-base font-medium text-white placeholder-zinc-600 outline-none ring-0 focus:ring-0 focus:outline-none max-h-[160px]"
+          className="max-h-[200px] w-full resize-none appearance-none border-0 bg-transparent px-5 pb-1 pt-4 text-base text-white placeholder-zinc-500 outline-none ring-0 focus:outline-none focus:ring-0"
           rows={1}
           disabled={disabled}
         />
 
-        <div className="flex h-12 items-center justify-between border-t border-zinc-800/50 bg-zinc-900/40 px-5">
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              onClick={onMicClick}
-              className="p-1.5 text-zinc-600 transition-colors hover:text-white rounded-xl hover:bg-zinc-800"
-            >
-              <Mic size={18} />
-            </button>
-            <label className="cursor-pointer p-1.5 text-zinc-600 transition-colors hover:text-white rounded-xl hover:bg-zinc-800">
-              <FileUp size={18} />
-              <input
-                ref={fileInputRef}
-                type="file"
-                className="hidden"
-                onChange={handleFilePickerChange}
-                accept=".csv,.txt,.pdf,.xlsx,image/*"
-                multiple
-              />
-            </label>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="hidden sm:block text-[10px] text-zinc-700">Enter to send</span>
+        <div className="flex items-center justify-between px-3 pb-3 pt-1">
+          <label
+            aria-label="Attach files"
+            className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border border-zinc-700 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
+          >
+            <Plus size={18} />
+            <input
+              ref={fileInputRef}
+              type="file"
+              className="hidden"
+              onChange={handleFilePickerChange}
+              accept=".csv,.txt,.pdf,.xlsx,image/*"
+              multiple
+            />
+          </label>
+
+          <div className="flex items-center gap-1.5">
+            {onMicClick && (
+              <button
+                type="button"
+                onClick={onMicClick}
+                aria-label="Dictate"
+                className="flex h-9 w-9 items-center justify-center rounded-full text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
+              >
+                <Mic size={18} />
+              </button>
+            )}
             {isProcessing ? (
               <button
                 type="button"
                 onClick={onStop}
-                className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-black shadow-lg transition-all hover:scale-110 active:scale-95"
+                aria-label="Stop"
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-black transition-transform hover:scale-105 active:scale-95"
               >
-                <Square size={13} fill="currentColor" />
+                <Square size={12} fill="currentColor" />
               </button>
             ) : (
               <button
                 type="submit"
+                aria-label="Send"
                 disabled={(!value.trim() && !files.length) || disabled}
-                className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-black shadow-lg transition-all hover:scale-110 active:scale-95 disabled:bg-zinc-800 disabled:text-zinc-600 disabled:hover:scale-100"
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-black transition-transform hover:scale-105 active:scale-95 disabled:scale-100 disabled:bg-zinc-800 disabled:text-zinc-600"
               >
-                <Send size={15} fill="currentColor" />
+                <ArrowUp size={17} strokeWidth={2.5} />
               </button>
             )}
           </div>
