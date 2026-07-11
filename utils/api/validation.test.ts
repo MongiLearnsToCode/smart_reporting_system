@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseExportPayload, parseProcessPayload, parseSettings } from './validation';
+import { parseExportPayload, parseProcessPayload, parseReportPayload, parseSettings } from './validation';
 
 describe('validation helpers', () => {
   it('whitelists settings and drops unknown values', () => {
@@ -35,5 +35,20 @@ describe('validation helpers', () => {
       range: 365,
       template: '<bad>',
     });
+  });
+
+  it('normalizes report payloads', () => {
+    expect(parseReportPayload({ days: 30, client: '  Meridian Corp  ' })).toEqual({
+      days: 30,
+      client: 'Meridian Corp',
+    });
+  });
+
+  it('defaults report payloads and clamps out-of-range values', () => {
+    expect(parseReportPayload({})).toEqual({ days: 7, client: null });
+    expect(parseReportPayload(null)).toEqual({ days: 7, client: null });
+    expect(parseReportPayload({ days: 9999, client: '' })).toEqual({ days: 365, client: null });
+    expect(parseReportPayload({ days: 0, client: 42 })).toEqual({ days: 1, client: null });
+    expect(parseReportPayload({ client: 'x'.repeat(200) }).client).toHaveLength(80);
   });
 });
