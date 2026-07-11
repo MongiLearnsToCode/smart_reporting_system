@@ -90,3 +90,8 @@ alter table public.user_settings enable row level security;
 create policy "Users can manage their own settings"
   on public.user_settings for all
   using (auth.uid() = user_id);
+
+-- RLS policies alone do not grant table access; the authenticated role
+-- also needs table-level privileges (missing on databases initialised
+-- before this line existed — run it there manually).
+grant select, insert, update on public.user_settings to authenticated;
