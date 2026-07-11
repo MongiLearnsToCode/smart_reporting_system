@@ -7,3 +7,6 @@
 # Next.js
 /.next/
 .vercel
+
+# Local design inspiration, not part of the app
+/UI_Inspo/
