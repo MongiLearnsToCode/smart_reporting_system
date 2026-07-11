@@ -24,3 +24,17 @@ export function withCsrf(input: RequestInfo | URL, init?: RequestInit): [Request
   }
   return [input, { ...init, headers }];
 }
+
+/**
+ * fetch that guarantees a CSRF token is present before the request is sent.
+ * Use this for all mutating calls — a bare withCsrf() races the initial
+ * token fetch on first page load (submit right after sign-in got a 403).
+ */
+export async function csrfFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  const headers = new Headers(init?.headers);
+  const token = await ensureCsrfToken();
+  if (token) {
+    headers.set('x-csrf-token', token);
+  }
+  return fetch(input, { ...init, headers });
+}

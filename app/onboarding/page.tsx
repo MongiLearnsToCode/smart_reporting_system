@@ -10,7 +10,7 @@ import {
   Globe,
   MessageSquare,
 } from "lucide-react";
-import { ensureCsrfToken, withCsrf } from "@/utils/api/csrf";
+import { csrfFetch, ensureCsrfToken } from "@/utils/api/csrf";
 
 const OPTIONS = [
   { id: "solo", label: "Solo Founder", icon: Briefcase, color: "bg-blue-500" },
@@ -50,11 +50,11 @@ export default function Onboarding() {
     setLoading(true);
     try {
       // Seed initial widgets based on industry
-      await fetch(...withCsrf("/api/widgets/seed", {
+      await csrfFetch("/api/widgets/seed", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ industry: option }),
-      }));
+      });
       window.location.href = "/"; // Use standard navigation
     } catch (error) {
       console.error(error);
