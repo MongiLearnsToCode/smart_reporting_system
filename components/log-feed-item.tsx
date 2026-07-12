@@ -33,20 +33,16 @@ export function LogFeedItem({ log, onClick, allLogs }: {
       initial={{ opacity: 0, x: 12 }}
       animate={{ opacity: 1, x: 0 }}
       onClick={onClick}
-      className="group w-full text-left rounded-2xl border border-zinc-800 bg-zinc-900 p-4 hover:border-zinc-700 hover:bg-zinc-800/80 transition-all"
+      className="group w-full text-left rounded-lg border border-zinc-800/80 bg-zinc-900/40 p-4 hover:border-zinc-700 hover:bg-zinc-900/80 transition-all"
     >
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
           <div className={"h-1.5 w-1.5 rounded-full " + cat.dot} />
-          <span
-            className={
-              "text-[10px] font-black uppercase tracking-widest " + cat.text
-            }
-          >
+          <span className={"text-[11px] font-medium " + cat.text}>
             {log.category}
           </span>
           {log.entities?.client ? (
-            <span className="max-w-[90px] truncate rounded-full border border-zinc-700 px-1.5 py-px text-[9px] font-bold text-zinc-400">
+            <span className="max-w-[90px] truncate rounded-full border border-zinc-800 px-1.5 py-px text-[10px] font-medium capitalize text-zinc-500">
               {log.entities.client}
             </span>
           ) : null}
@@ -57,13 +53,13 @@ export function LogFeedItem({ log, onClick, allLogs }: {
             <AlertTriangle size={10} className="text-amber-400" />
           ) : null}
         </div>
-        <span className="text-[10px] text-zinc-600">{timeAgo}</span>
+        <span className="font-mono text-[10px] text-zinc-600">{timeAgo}</span>
       </div>
       <p className="text-xs text-zinc-400 leading-relaxed group-hover:text-zinc-300 transition-colors">
         {preview}
       </p>
       {log.entities && log.entities.amount != null ? (
-        <p className="mt-2 text-sm font-bold text-white">
+        <p className="mt-2 font-mono text-[13px] font-medium text-zinc-100">
           {(log.entities.currency || "$") + " "}
           {Number(log.entities.amount).toLocaleString()}
         </p>
@@ -73,7 +69,7 @@ export function LogFeedItem({ log, onClick, allLogs }: {
           {log.entities && log.entities.sentiment ? (
             <span
               className={
-                "text-[9px] font-bold uppercase rounded-full px-2 py-0.5 " +
+                "rounded-full px-2 py-0.5 text-[10px] font-medium capitalize " +
                 sentBg
               }
             >
@@ -85,7 +81,7 @@ export function LogFeedItem({ log, onClick, allLogs }: {
           log.entities.urgency !== "low" ? (
             <span
               className={
-                "text-[9px] font-bold uppercase rounded-full px-2 py-0.5 " +
+                "rounded-full px-2 py-0.5 text-[10px] font-medium capitalize " +
                 urgBg
               }
             >

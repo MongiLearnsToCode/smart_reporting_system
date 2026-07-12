@@ -111,7 +111,7 @@ export function Composer({
     <>
       {isDragging && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-zinc-950/80">
-          <div className="rounded-2xl border border-dashed border-zinc-600 bg-zinc-900 px-12 py-10 text-center">
+          <div className="rounded-lg border border-dashed border-zinc-700 bg-zinc-900 px-12 py-10 text-center">
             <FileUp size={32} className="mx-auto mb-3 text-zinc-400" />
             <p className="text-sm font-medium text-zinc-200">Drop files here</p>
             <p className="mt-1 text-xs text-zinc-500">Attach to your log entry</p>
@@ -121,27 +121,27 @@ export function Composer({
 
       <form
         onSubmit={onSubmit}
-        className="relative flex w-full flex-col rounded-[26px] border border-zinc-800 bg-zinc-900 transition-colors focus-within:border-zinc-600"
+        className="relative flex w-full flex-col rounded-xl border border-zinc-800 bg-zinc-900 transition-colors focus-within:border-zinc-600"
       >
         {files.length > 0 && (
           <div className="flex gap-2 overflow-x-auto px-4 pt-3">
             {files.map((file, i) => (
               <div
                 key={i}
-                className="group/chip flex shrink-0 items-center gap-2 rounded-xl border border-zinc-800 bg-zinc-800/60 py-1.5 pl-2 pr-2.5"
+                className="group/chip flex shrink-0 items-center gap-2 rounded-md border border-zinc-700/60 bg-zinc-800/60 py-1.5 pl-2 pr-2.5"
               >
-                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-zinc-700/60 text-zinc-300">
+                <div className="flex h-7 w-7 items-center justify-center rounded bg-zinc-700/60 text-zinc-300">
                   {file.type.startsWith("image/") ? <Image size={13} /> : <FileText size={13} />}
                 </div>
                 <div className="flex flex-col leading-tight">
                   <span className="max-w-[130px] truncate text-xs font-medium text-zinc-200">{file.name}</span>
-                  <span className="text-[10px] text-zinc-500">{formatSize(file.size)}</span>
+                  <span className="font-mono text-[10px] text-zinc-500">{formatSize(file.size)}</span>
                 </div>
                 <button
                   type="button"
                   onClick={() => onFileRemove(i)}
                   aria-label={`Remove ${file.name}`}
-                  className="ml-1 rounded-full p-0.5 text-zinc-500 transition-colors hover:bg-zinc-700 hover:text-white"
+                  className="ml-1 rounded p-0.5 text-zinc-500 transition-colors hover:bg-zinc-700 hover:text-zinc-100"
                 >
                   <X size={13} />
                 </button>
@@ -157,7 +157,7 @@ export function Composer({
           onKeyDown={handleKeyDown}
           onPaste={handlePaste}
           placeholder="Log an expense, project update, client note..."
-          className="max-h-[200px] w-full resize-none appearance-none border-0 bg-transparent px-5 pb-1 pt-4 text-base text-white placeholder-zinc-500 outline-none ring-0 focus:outline-none focus:ring-0"
+          className="max-h-[200px] w-full resize-none appearance-none border-0 bg-transparent px-4 pb-1 pt-3.5 text-sm text-zinc-100 placeholder-zinc-500 outline-none ring-0 focus:outline-none focus:ring-0"
           rows={1}
           disabled={disabled}
         />
@@ -165,9 +165,9 @@ export function Composer({
         <div className="flex items-center justify-between px-3 pb-3 pt-1">
           <label
             aria-label="Attach files"
-            className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-full border border-zinc-700 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
+            className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-md border border-zinc-800 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-100"
           >
-            <Plus size={18} />
+            <Plus size={16} />
             <input
               ref={fileInputRef}
               type="file"
@@ -184,9 +184,9 @@ export function Composer({
                 type="button"
                 onClick={onMicClick}
                 aria-label="Dictate"
-                className="flex h-9 w-9 items-center justify-center rounded-full text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-white"
+                className="flex h-8 w-8 items-center justify-center rounded-md text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-100"
               >
-                <Mic size={18} />
+                <Mic size={16} />
               </button>
             )}
             {isProcessing ? (
@@ -194,18 +194,18 @@ export function Composer({
                 type="button"
                 onClick={onStop}
                 aria-label="Stop"
-                className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-black transition-transform hover:scale-105 active:scale-95"
+                className="flex h-8 w-8 items-center justify-center rounded-md border border-violet-500/30 bg-violet-500/15 text-violet-300 transition-colors hover:bg-violet-500/25 hover:text-violet-200"
               >
-                <Square size={12} fill="currentColor" />
+                <Square size={11} fill="currentColor" />
               </button>
             ) : (
               <button
                 type="submit"
                 aria-label="Send"
                 disabled={(!value.trim() && !files.length) || disabled}
-                className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-black transition-transform hover:scale-105 active:scale-95 disabled:scale-100 disabled:bg-zinc-800 disabled:text-zinc-600"
+                className="flex h-8 w-8 items-center justify-center rounded-md border border-violet-500/30 bg-violet-500/15 text-violet-300 transition-colors hover:bg-violet-500/25 hover:text-violet-200 disabled:border-transparent disabled:bg-zinc-800/60 disabled:text-zinc-600"
               >
-                <ArrowUp size={17} strokeWidth={2.5} />
+                <ArrowUp size={16} strokeWidth={2.5} />
               </button>
             )}
           </div>

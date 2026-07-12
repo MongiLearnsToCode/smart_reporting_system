@@ -417,12 +417,10 @@ export default function CodexApp() {
     <div className="flex h-screen w-full flex-col bg-black text-zinc-100 font-sans selection:bg-white selection:text-black">
       <header className="flex h-16 shrink-0 items-center justify-between border-b border-zinc-900 px-6">
         <div className="flex items-center gap-4">
-          <h1 className="text-2xl font-black tracking-tighter">CODEX</h1>
-          <div className="h-6 w-px bg-zinc-800" />
-          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-zinc-500">
-            <div
-              className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"
-            />
+          <h1 className="text-[15px] font-semibold tracking-[0.14em] text-zinc-100">CODEX</h1>
+          <div className="h-5 w-px bg-zinc-800" />
+          <div className="flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-0.5 text-[11px] font-medium text-emerald-400">
+            <div className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
             Live
           </div>
         </div>
@@ -432,9 +430,9 @@ export default function CodexApp() {
               onClick={function () {
                 setIsLogFeedPinned(true);
               }}
-              className="flex h-8 items-center gap-2 rounded-full border border-zinc-800 bg-zinc-900 px-3 text-xs font-bold text-zinc-400 hover:text-white transition-all"
+              className="flex h-8 items-center gap-2 rounded-md border border-zinc-800 bg-zinc-900 px-3 text-xs font-medium text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200 transition-colors"
             >
-              <ScrollText size={14} />
+              <ScrollText size={13} />
               <span className="hidden md:inline">Log Feed</span>
             </button>
           )}
@@ -442,16 +440,16 @@ export default function CodexApp() {
             onClick={function () {
               setShowConflicts(true);
             }}
-            className="relative flex h-8 w-8 items-center justify-center rounded-full bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 transition-colors"
+            className="relative flex h-8 w-8 items-center justify-center rounded-md border border-amber-500/20 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 transition-colors"
           >
-            <AlertTriangle size={15} />
+            <AlertTriangle size={14} />
             {conflicts.length > 0 ? (
               <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-amber-500" />
             ) : null}
           </button>
           <button
             onClick={function () { setShowReports(true); }}
-            className="hidden sm:flex items-center gap-2 rounded-full border border-zinc-800 bg-white px-4 py-1.5 text-xs font-bold text-black transition-all hover:bg-zinc-200"
+            className="hidden sm:flex h-8 items-center gap-2 rounded-md border border-violet-500/30 bg-violet-500/10 px-3 text-xs font-medium text-violet-300 transition-colors hover:bg-violet-500/20 hover:text-violet-200"
           >
             <FileText size={13} /> Reports
           </button>
@@ -472,11 +470,11 @@ export default function CodexApp() {
                   initial={{ opacity: 0, y: 6, scale: 0.96 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: 6, scale: 0.96 }}
-                  className="absolute right-0 top-10 z-50 w-56 rounded-2xl border border-zinc-800 bg-zinc-950 shadow-2xl overflow-hidden"
+                  className="absolute right-0 top-10 z-50 w-56 rounded-lg border border-zinc-800 bg-zinc-950 shadow-2xl overflow-hidden"
                 >
-                  <div className="px-4 py-3 border-b border-zinc-800">
+                  <div className="px-4 py-3 border-b border-zinc-800/80">
                     {user?.user_metadata?.full_name ? (
-                      <p className="text-sm font-bold text-white truncate">{user.user_metadata.full_name}</p>
+                      <p className="text-[13px] font-semibold text-zinc-100 truncate">{user.user_metadata.full_name}</p>
                     ) : null}
                     <p className="text-xs text-zinc-500 truncate">{user?.email}</p>
                   </div>
@@ -485,13 +483,13 @@ export default function CodexApp() {
                       setShowUserMenu(false);
                       setShowSettings(true);
                     }}
-                    className="flex w-full items-center gap-2.5 px-4 py-3 text-sm text-zinc-400 hover:bg-zinc-900 hover:text-white transition-colors"
+                    className="flex w-full items-center gap-2.5 px-4 py-2.5 text-[13px] text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100 transition-colors"
                   >
                     <Settings size={14} /> Settings
                   </button>
                   <button
                     onClick={function () { setTheme(theme === 'dark' ? 'light' : 'dark'); setShowUserMenu(false); }}
-                    className="flex w-full items-center gap-2.5 px-4 py-3 text-sm text-zinc-400 hover:bg-zinc-900 hover:text-white transition-colors"
+                    className="flex w-full items-center gap-2.5 px-4 py-2.5 text-[13px] text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100 transition-colors"
                   >
                     {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />} {theme === 'dark' ? 'Light' : 'Dark'} mode
                   </button>
@@ -501,7 +499,7 @@ export default function CodexApp() {
                       await createClient().auth.signOut();
                       window.location.href = "/account/signin";
                     }}
-                    className="flex w-full items-center gap-2.5 px-4 py-3 text-sm text-zinc-400 hover:bg-zinc-900 hover:text-white transition-colors"
+                    className="flex w-full items-center gap-2.5 px-4 py-2.5 text-[13px] text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100 transition-colors"
                   >
                     <LogOut size={14} /> Sign out
                   </button>
@@ -675,11 +673,11 @@ export default function CodexApp() {
             >
               <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-900">
                 <div className="flex items-center gap-2">
-                  <ScrollText size={14} className="text-zinc-500" />
-                  <span className="text-xs font-black uppercase tracking-widest text-zinc-400">
+                  <ScrollText size={13} className="text-zinc-500" />
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-zinc-500">
                     Log Feed
                   </span>
-                  <span className="rounded-full bg-zinc-800 px-2 py-0.5 text-[10px] font-bold text-zinc-500">
+                  <span className="font-mono text-[10.5px] text-zinc-600">
                     {allLogs.length}
                   </span>
                 </div>
@@ -690,7 +688,7 @@ export default function CodexApp() {
                         setSelectedCategory(null);
                         setSelectedClient(null);
                       }}
-                      className="flex items-center gap-1 text-[10px] font-bold text-zinc-500 hover:text-white transition-colors"
+                      className="flex items-center gap-1 text-[11px] font-medium text-zinc-500 hover:text-zinc-200 transition-colors"
                     >
                       <X size={10} /> Clear filter
                     </button>
@@ -725,7 +723,7 @@ export default function CodexApp() {
                           setSelectedCategory(active ? null : cat);
                         }}
                         className={
-                          "shrink-0 rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-widest transition-all border " +
+                          "shrink-0 rounded-full px-3 py-1 text-[11px] font-medium transition-all border " +
                           cls
                         }
                       >
@@ -748,9 +746,9 @@ export default function CodexApp() {
                           setSelectedClient(active ? null : client);
                         }}
                         className={
-                          "shrink-0 rounded-full border px-3 py-1 text-[10px] font-bold transition-all " +
+                          "shrink-0 rounded-full border px-3 py-1 text-[11px] font-medium capitalize transition-all " +
                           (active
-                            ? "border-blue-500/50 bg-blue-500/10 text-blue-400"
+                            ? "border-blue-500/30 bg-blue-500/10 text-blue-400"
                             : "border-zinc-800 text-zinc-500 hover:border-zinc-700 hover:text-zinc-300")
                         }
                       >
@@ -790,7 +788,7 @@ export default function CodexApp() {
                   <button
                     onClick={loadMoreLogs}
                     disabled={isLoadingMore}
-                    className="w-full rounded-xl border border-zinc-800 bg-zinc-900 py-2.5 text-xs font-bold uppercase tracking-widest text-zinc-500 transition-all hover:border-zinc-700 hover:text-zinc-300 disabled:opacity-40"
+                    className="w-full rounded-md border border-zinc-800 bg-zinc-900/40 py-2.5 text-xs font-medium text-zinc-500 transition-all hover:border-zinc-700 hover:text-zinc-300 disabled:opacity-40"
                   >
                     {isLoadingMore ? "Loading…" : "Load more"}
                   </button>
@@ -809,13 +807,13 @@ export default function CodexApp() {
                 initial={{ opacity: 0, scale: 0.9, y: 8 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.9 }}
-                className="flex items-center gap-3 rounded-full border border-zinc-800 bg-zinc-900/90 px-5 py-2 shadow-2xl backdrop-blur-xl"
+                className="flex items-center gap-2.5 rounded-full border border-violet-500/30 bg-zinc-900/90 px-4 py-1.5 shadow-2xl backdrop-blur-xl"
               >
                 <div
-                  className="h-3.5 w-3.5 rounded-full border-2 border-white border-t-transparent animate-spin"
+                  className="h-3 w-3 rounded-full border-2 border-violet-400 border-t-transparent animate-spin"
                 />
-                <span className="text-[11px] font-bold uppercase tracking-widest text-white">
-                  AI Processing...
+                <span className="text-xs font-medium text-violet-300">
+                  Processing your log…
                 </span>
               </motion.div>
             ) : null}
@@ -824,10 +822,10 @@ export default function CodexApp() {
                 initial={{ opacity: 0, scale: 0.9, y: 8 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.9 }}
-                className="flex items-center gap-3 rounded-full border border-rose-500/30 bg-rose-500/10 px-5 py-2 shadow-2xl backdrop-blur-xl"
+                className="flex items-center gap-2.5 rounded-full border border-rose-500/30 bg-rose-500/10 px-4 py-1.5 shadow-2xl backdrop-blur-xl"
               >
                 <AlertCircle size={13} className="text-rose-400" />
-                <span className="text-[11px] font-bold uppercase tracking-widest text-rose-400">
+                <span className="text-xs font-medium text-rose-400">
                   {(processMutation.error && processMutation.error.message) ||
                     "Processing failed — try again"}
                 </span>
