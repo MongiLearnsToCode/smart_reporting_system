@@ -30,7 +30,12 @@ create table if not exists public.logs (
   type text,
   file_url text,
   category text,
+  -- Array of extracted entity objects (see utils/api/entity-normalizer.ts)
   entities jsonb,
+  ai_confidence numeric,
+  processing_status text not null default 'processed'
+    check (processing_status in ('pending', 'processed', 'needs_review', 'failed')),
+  excluded_from_reports boolean not null default false,
   is_conflict boolean not null default false,
   conflict_source_id uuid references public.logs(id),
   conflict_reason text,
@@ -48,6 +53,9 @@ create index if not exists logs_user_timestamp_idx
 
 create index if not exists logs_user_category_timestamp_idx
   on public.logs (user_id, category, timestamp desc);
+
+create index if not exists logs_entities_gin_idx
+  on public.logs using gin (entities jsonb_path_ops);
 
 -- Widgets
 create table if not exists public.widgets (
