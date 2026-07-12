@@ -13,32 +13,12 @@ import {
 import { csrfFetch, ensureCsrfToken } from "@/utils/api/csrf";
 
 const OPTIONS = [
-  { id: "solo", label: "Solo Founder", icon: Briefcase, color: "bg-blue-500" },
-  {
-    id: "freelance",
-    label: "Freelancer",
-    icon: Globe,
-    color: "bg-emerald-500",
-  },
-  {
-    id: "consultant",
-    label: "Consultant",
-    icon: MessageSquare,
-    color: "bg-purple-500",
-  },
-  {
-    id: "retail",
-    label: "E-commerce",
-    icon: ShoppingBag,
-    color: "bg-rose-500",
-  },
-  {
-    id: "creative",
-    label: "Creative Professional",
-    icon: Heart,
-    color: "bg-amber-500",
-  },
-  { id: "dev", label: "Software Engineer", icon: Code, color: "bg-zinc-500" },
+  { id: "solo", label: "Solo Founder", icon: Briefcase, chip: "bg-blue-500/15 text-blue-400" },
+  { id: "freelance", label: "Freelancer", icon: Globe, chip: "bg-emerald-500/15 text-emerald-400" },
+  { id: "consultant", label: "Consultant", icon: MessageSquare, chip: "bg-violet-500/15 text-violet-400" },
+  { id: "retail", label: "E-commerce", icon: ShoppingBag, chip: "bg-rose-500/15 text-rose-400" },
+  { id: "creative", label: "Creative Professional", icon: Heart, chip: "bg-amber-500/15 text-amber-400" },
+  { id: "dev", label: "Software Engineer", icon: Code, chip: "bg-zinc-500/15 text-zinc-400" },
 ];
 
 export default function Onboarding() {
@@ -63,42 +43,45 @@ export default function Onboarding() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-black p-8 text-white font-sans">
-      <div className="max-w-3xl w-full">
+    <div className="flex min-h-screen items-center justify-center bg-black p-8 text-zinc-100 font-sans">
+      <div className="max-w-2xl w-full">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="text-center mb-12"
+          className="mb-10"
         >
-          <h1 className="text-5xl font-black tracking-tighter mb-4 italic">
-            FIRST QUESTION.
-          </h1>
-          <p className="text-zinc-500 text-xl font-medium">
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-zinc-500">
+            Welcome to Codex
+          </p>
+          <h1 className="text-[22px] font-semibold tracking-tight text-zinc-100">
             What best describes your daily work?
+          </h1>
+          <p className="mt-1.5 text-sm text-zinc-500">
+            We&rsquo;ll seed your canvas with the widgets that fit.
           </p>
         </motion.div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {OPTIONS.map((opt, i) => (
             <motion.button
               key={opt.id}
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: i * 0.1 }}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.06 }}
               onClick={() => handleSelect(opt.id)}
               disabled={loading}
-              className="flex items-center gap-6 rounded-[32px] border border-zinc-800 bg-zinc-900 p-8 text-left transition-all hover:border-zinc-700 hover:bg-zinc-800 active:scale-95 disabled:opacity-50 cursor-pointer"
+              className="flex items-center gap-4 rounded-lg border border-zinc-800/80 bg-zinc-900/40 p-4 text-left transition-colors hover:border-zinc-700 hover:bg-zinc-900/80 disabled:opacity-50 cursor-pointer"
             >
               <div
-                className={`h-16 w-16 rounded-3xl ${opt.color} flex items-center justify-center text-white shadow-2xl shadow-${opt.color.split("-")[1]}-500/20`}
+                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-md ${opt.chip}`}
               >
-                <opt.icon size={32} />
+                <opt.icon size={18} />
               </div>
               <div>
-                <h3 className="text-xl font-black tracking-tight">
+                <h3 className="text-[14px] font-semibold text-zinc-100">
                   {opt.label}
                 </h3>
-                <p className="text-zinc-500 font-medium">
+                <p className="mt-0.5 text-xs text-zinc-500">
                   Auto-configure your canvas
                 </p>
               </div>
@@ -107,10 +90,10 @@ export default function Onboarding() {
         </div>
 
         {loading && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-xl z-50 flex flex-col items-center justify-center">
-            <div className="h-12 w-12 animate-spin rounded-full border-4 border-white border-t-transparent mb-4" />
-            <p className="text-xl font-black uppercase tracking-widest italic animate-pulse">
-              Personalizing Codex...
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-xl z-50 flex flex-col items-center justify-center">
+            <div className="h-8 w-8 animate-spin rounded-full border-2 border-violet-400 border-t-transparent mb-4" />
+            <p className="text-sm font-medium text-zinc-300">
+              Personalizing Codex…
             </p>
           </div>
         )}

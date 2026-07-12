@@ -39,24 +39,26 @@ export function FilePreviewModal({ file, fileUrl, fileName, onClose }: {
         animate={{ scale: 1, opacity: 1 }}
         exit={{ scale: 0.95, opacity: 0 }}
         onClick={(e) => e.stopPropagation()}
-        className="relative flex flex-col w-full max-w-4xl max-h-[90vh] rounded-2xl border border-zinc-800 bg-zinc-950 overflow-hidden shadow-2xl"
+        className="relative flex flex-col w-full max-w-4xl max-h-[90vh] rounded-xl border border-zinc-800 bg-zinc-950 overflow-hidden shadow-2xl"
       >
-        <div className="flex items-center justify-between px-5 py-3 border-b border-zinc-800 shrink-0">
-          <div className="flex items-center gap-2 min-w-0">
-            <FileText size={14} className="text-zinc-400 shrink-0" />
-            <span className="text-sm font-bold text-white truncate">{name}</span>
-            {file ? <span className="text-xs text-zinc-600 shrink-0">({(file.size / 1024).toFixed(1)} KB)</span> : null}
+        <div className="flex items-center justify-between px-5 py-3 border-b border-zinc-800/80 shrink-0">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-zinc-800 bg-zinc-900 text-zinc-500">
+              <FileText size={13} />
+            </div>
+            <span className="text-[13px] font-semibold text-zinc-100 truncate">{name}</span>
+            {file ? <span className="font-mono text-[10.5px] text-zinc-600 shrink-0">{(file.size / 1024).toFixed(1)} KB</span> : null}
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <a
               href={url}
               download={name}
-              className="flex items-center gap-1.5 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-xs font-bold text-zinc-400 hover:text-white transition-colors"
+              className="flex items-center gap-1.5 rounded-md border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-xs font-medium text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200 transition-colors"
             >
               <Download size={12} /> Download
             </a>
-            <button onClick={onClose} className="text-zinc-500 hover:text-white transition-colors">
-              <X size={18} />
+            <button onClick={onClose} className="text-zinc-500 hover:text-zinc-200 transition-colors">
+              <X size={17} />
             </button>
           </div>
         </div>
@@ -82,7 +84,7 @@ export function FilePreviewModal({ file, fileUrl, fileName, onClose }: {
               <a
                 href={url}
                 download={name}
-                className="flex items-center gap-2 rounded-xl bg-zinc-800 px-5 py-2.5 text-sm font-bold text-white hover:bg-zinc-700 transition-colors"
+                className="flex items-center gap-2 rounded-md border border-zinc-800 bg-zinc-900 px-4 py-2 text-[13px] font-medium text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100 transition-colors"
               >
                 <Download size={14} /> Download to open
               </a>

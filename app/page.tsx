@@ -855,16 +855,24 @@ export default function CodexApp() {
             className="fixed inset-y-0 right-0 z-[60] w-full max-w-sm border-l border-zinc-800 bg-zinc-950 p-6 shadow-2xl"
           >
             <div className="mb-6 flex items-center justify-between">
-              <h2 className="text-lg font-black uppercase tracking-widest text-white">
-                Conflicts
-              </h2>
+              <div className="flex items-center gap-3">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-amber-500/15 text-amber-400">
+                  <AlertTriangle size={15} />
+                </div>
+                <div>
+                  <h2 className="text-[15px] font-semibold text-zinc-100">Conflicts</h2>
+                  <p className="mt-0.5 text-xs text-zinc-500">
+                    Entries that may duplicate or contradict earlier logs
+                  </p>
+                </div>
+              </div>
               <button
                 onClick={function () {
                   setShowConflicts(false);
                 }}
-                className="text-zinc-500 hover:text-white"
+                className="text-zinc-500 hover:text-zinc-200 transition-colors"
               >
-                <X size={20} />
+                <X size={18} />
               </button>
             </div>
             <div className="space-y-4">
@@ -877,19 +885,19 @@ export default function CodexApp() {
                 return (
                   <div
                     key={log.id}
-                    className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-5 space-y-3"
+                    className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-4 space-y-3"
                   >
-                    <div className="flex items-center gap-2 text-[10px] font-black text-amber-500 uppercase tracking-widest">
-                      <AlertCircle size={12} /> Conflict
+                    <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-amber-400">
+                      <AlertCircle size={11} /> Conflict
                     </div>
                     <p className="text-xs text-zinc-300 leading-relaxed">
                       {log.raw_content}
                     </p>
-                    <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-3 py-2.5 space-y-1.5">
-                      <p className="text-[9px] font-black uppercase tracking-widest text-zinc-600">Why flagged</p>
+                    <div className="rounded-md border border-zinc-800/80 bg-zinc-900/40 px-3 py-2.5 space-y-1.5">
+                      <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-zinc-500">Why flagged</p>
                       <p className="text-[11px] text-zinc-400 leading-relaxed">
                         {log.conflict_reason || (
-                          <>Another <span className="font-bold text-zinc-300">{log.category}</span> entry was already logged today.</>
+                          <>Another <span className="font-medium text-zinc-300">{log.category}</span> entry was already logged today.</>
                         )}
                       </p>
                       {log.conflict_source_id ? (
@@ -908,17 +916,17 @@ export default function CodexApp() {
                         onClick={function () {
                           setShowConflicts(false);
                         }}
-                        className="flex-1 rounded-xl bg-amber-500 py-2 text-[11px] font-black text-black"
+                        className="flex-1 rounded-md border border-amber-500/30 bg-amber-500/10 py-2 text-xs font-medium text-amber-300 transition-colors hover:bg-amber-500/20 hover:text-amber-200"
                       >
-                        KEEP
+                        Keep entry
                       </button>
                       <button
                         onClick={function () {
                           handleRevert(log.id);
                         }}
-                        className="flex items-center justify-center gap-1.5 rounded-xl border border-zinc-900 px-3 text-[11px] font-black text-zinc-400 hover:text-white transition-colors"
+                        className="flex items-center justify-center gap-1.5 rounded-md border border-zinc-800 px-3 text-xs font-medium text-zinc-400 transition-colors hover:bg-zinc-900 hover:text-zinc-200"
                       >
-                        <RotateCcw size={12} /> REVERT
+                        <RotateCcw size={12} /> Revert
                       </button>
                     </div>
                   </div>

@@ -62,92 +62,87 @@ export function LogPreviewModal({ log, onClose, allLogs }: {
         initial={{ scale: 0.94, y: 16 }}
         animate={{ scale: 1, y: 0 }}
         exit={{ scale: 0.94, y: 16 }}
-        className="w-full max-w-xl rounded-[36px] border border-zinc-800 bg-zinc-950 shadow-2xl overflow-hidden"
+        className="w-full max-w-xl rounded-xl border border-zinc-800 bg-zinc-950 shadow-2xl overflow-hidden"
         onClick={function (e) {
           e.stopPropagation();
         }}
       >
-        <div className="px-8 pt-8 pb-6 border-b border-zinc-800/60">
+        <div className="px-6 py-4 border-b border-zinc-800/80">
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-center gap-3">
               <div
                 className={
-                  "h-9 w-9 rounded-2xl flex items-center justify-center " +
+                  "h-8 w-8 shrink-0 rounded-md flex items-center justify-center " +
                   cat.bg
                 }
               >
                 {log.type === "file" ? (
-                  <FileText size={16} className={cat.text} />
+                  <FileText size={15} className={cat.text} />
                 ) : (
-                  <MessageSquare size={16} className={cat.text} />
+                  <MessageSquare size={15} className={cat.text} />
                 )}
               </div>
               <div>
-                <span
-                  className={
-                    "text-[10px] font-black uppercase tracking-widest " +
-                    cat.text
-                  }
-                >
+                <span className={"text-[13px] font-semibold " + cat.text}>
                   {log.category}
                 </span>
-                <p className="text-[11px] text-zinc-500 mt-0.5">
+                <p className="font-mono text-[10.5px] text-zinc-500 mt-0.5">
                   {new Date(log.timestamp).toLocaleString()}
                 </p>
               </div>
             </div>
             <div className="flex items-center gap-2">
               {log.is_conflict ? (
-                <div className="flex items-center gap-1 rounded-full bg-amber-500/10 border border-amber-500/30 px-3 py-1 text-[10px] font-black text-amber-400 uppercase tracking-widest">
+                <div className="flex items-center gap-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 px-2.5 py-0.5 text-[11px] font-medium text-amber-400">
                   <AlertTriangle size={10} /> Conflict
                 </div>
               ) : null}
               <button
                 onClick={onClose}
-                className="h-8 w-8 rounded-full border border-zinc-800 bg-zinc-900 flex items-center justify-center text-zinc-500 hover:text-white transition-colors"
+                className="h-8 w-8 rounded-md border border-zinc-800 bg-zinc-900 flex items-center justify-center text-zinc-500 hover:text-zinc-200 transition-colors"
               >
-                <X size={16} />
+                <X size={15} />
               </button>
             </div>
           </div>
         </div>
-        <div className="px-8 py-6 border-b border-zinc-800/60">
-          <p className="text-[10px] font-black uppercase tracking-widest text-zinc-600 mb-3">
+        <div className="px-6 py-5 border-b border-zinc-800/80">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-zinc-500 mb-3">
             Raw Log
           </p>
-          <p className="text-zinc-200 text-sm leading-relaxed whitespace-pre-wrap">
+          <p className="text-zinc-200 text-[13px] leading-relaxed whitespace-pre-wrap">
             {log.raw_content}
           </p>
           {log.file_url ? (
             <button
               onClick={function () { setShowAttachment(true); }}
-              className="mt-3 inline-flex items-center gap-2 text-[11px] font-bold text-blue-400 hover:text-blue-300 transition-colors"
+              className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium text-blue-400 hover:text-blue-300 transition-colors"
             >
               <FileText size={12} /> View attached file
             </button>
           ) : null}
         </div>
         {log.is_conflict ? (
-          <div className="px-8 py-5 border-b border-zinc-800/60 bg-amber-500/5">
-            <div className="flex items-center gap-2 mb-2">
-              <AlertTriangle size={12} className="text-amber-400" />
-              <p className="text-[10px] font-black uppercase tracking-widest text-amber-400">
+          <div className="px-6 py-4 border-b border-zinc-800/80 bg-amber-500/5">
+            <div className="flex items-center gap-1.5 mb-2">
+              <AlertTriangle size={11} className="text-amber-400" />
+              <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-amber-400">
                 Why this is flagged
               </p>
             </div>
             <p className="text-xs text-zinc-400 leading-relaxed">
               {log.conflict_reason || (
-                <>Another <span className="font-bold text-zinc-300">{log.category}</span> entry was already logged earlier today. This entry may duplicate or contradict it.</>
+                <>Another <span className="font-medium text-zinc-300">{log.category}</span> entry was already logged earlier today. This entry may duplicate or contradict it.</>
               )}
             </p>
             {log.conflict_source_id && allLogs ? (
               (() => {
                 const src = allLogs.find((l: Log) => l.id === log.conflict_source_id);
                 return src ? (
-                  <div className="mt-3 rounded-2xl border border-amber-500/20 bg-zinc-900 px-4 py-3">
-                    <p className="text-[9px] font-black uppercase tracking-widest text-zinc-600 mb-1">Conflicting entry</p>
+                  <div className="mt-3 rounded-md border border-amber-500/20 bg-zinc-900/60 px-3.5 py-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-zinc-500 mb-1">Conflicting entry</p>
                     <p className="text-xs text-zinc-400 leading-relaxed line-clamp-3">{src.raw_content}</p>
-                    <p className="mt-1 text-[10px] text-zinc-600">{new Date(src.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</p>
+                    <p className="mt-1 font-mono text-[10px] text-zinc-600">{new Date(src.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</p>
                   </div>
                 ) : null;
               })()
@@ -155,8 +150,8 @@ export function LogPreviewModal({ log, onClose, allLogs }: {
           </div>
         ) : null}
         {items.length > 0 ? (
-          <div className="px-8 py-6">
-            <p className="text-[10px] font-black uppercase tracking-widest text-zinc-600 mb-4">
+          <div className="px-6 py-5">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-zinc-500 mb-3">
               Extracted Data
             </p>
             <div className="grid grid-cols-2 gap-3">
@@ -165,15 +160,15 @@ export function LogPreviewModal({ log, onClose, allLogs }: {
                 return (
                   <div
                     key={item.label}
-                    className="rounded-2xl border border-zinc-800 bg-zinc-900/60 px-4 py-3"
+                    className="rounded-md border border-zinc-800/80 bg-zinc-900/40 px-3.5 py-3"
                   >
                     <div className="flex items-center gap-1.5 mb-1">
                       <Icon size={11} className="text-zinc-500" />
-                      <span className="text-[9px] font-black uppercase tracking-widest text-zinc-600">
+                      <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-zinc-500">
                         {item.label}
                       </span>
                     </div>
-                    <p className="text-sm font-semibold text-zinc-200 capitalize truncate">
+                    <p className="text-[13px] font-medium text-zinc-200 capitalize truncate">
                       {item.value}
                     </p>
                   </div>
