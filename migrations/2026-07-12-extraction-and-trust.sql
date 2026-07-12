@@ -23,18 +23,28 @@ update public.widgets set title = 'Operations' where title in ('Inventory', 'Tea
 update public.widgets
   set config = jsonb_set(config, '{category}', '"Operations"')
   where config->>'category' in ('Inventory', 'Team');
+-- Sequential per name: a single UPDATE over both names collides on
+-- unique (user_id, name) for users holding both Inventory and Team.
 update public.categories set name = 'Operations'
-  where name in ('Inventory', 'Team')
+  where name = 'Inventory'
   and not exists (
     select 1 from public.categories c2
     where c2.user_id = categories.user_id and c2.name = 'Operations'
   );
-delete from public.categories where name in ('Inventory', 'Team');
+delete from public.categories where name = 'Inventory';
+update public.categories set name = 'Operations'
+  where name = 'Team'
+  and not exists (
+    select 1 from public.categories c2
+    where c2.user_id = categories.user_id and c2.name = 'Operations'
+  );
+delete from public.categories where name = 'Team';
 
 -- 3. Wrap legacy single-object entities into one-element PRD entity arrays.
 --    type: amount present -> expense, else note. confidence 0.8 so old logs
 --    are 'processed', never 'needs_review'. Runs only on object-shaped rows,
 --    so re-running is a no-op.
+-- Rows already array-shaped are assumed migrated and left untouched (incl. ai_confidence).
 update public.logs
 set
   entities = jsonb_build_array(
