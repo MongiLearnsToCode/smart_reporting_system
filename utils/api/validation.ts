@@ -38,10 +38,14 @@ export function parseSettings(input: unknown) {
   };
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export function parseProcessPayload(input: unknown) {
   const body = input && typeof input === 'object' ? input as Record<string, unknown> : {};
   const rawContent = typeof body.rawContent === 'string' ? body.rawContent.trim() : '';
-  if (!rawContent) throw new Error('Log content is required');
+  // A retry payload carries only the logId; the server re-reads stored content.
+  const logId = !rawContent && typeof body.logId === 'string' && UUID_RE.test(body.logId) ? body.logId : null;
+  if (!rawContent && !logId) throw new Error('Log content is required');
   if (rawContent.length > 12000) throw new Error('Log content is too long');
 
   const type = body.type === 'file' ? 'file' : 'text';
@@ -49,7 +53,35 @@ export function parseProcessPayload(input: unknown) {
     ? body.fileUrl
     : null;
 
-  return { rawContent, type, fileUrl };
+  return { rawContent, type, fileUrl, logId };
+}
+
+export function parseCorrectionPayload(input: unknown) {
+  const body = input && typeof input === 'object' ? input as Record<string, unknown> : {};
+
+  const entityIndex = typeof body.entityIndex === 'number' && Number.isInteger(body.entityIndex)
+    && body.entityIndex >= 0 && body.entityIndex < 50
+    ? body.entityIndex
+    : null;
+
+  let corrections: Record<string, string | number | null> | null = null;
+  if (body.corrections && typeof body.corrections === 'object' && !Array.isArray(body.corrections)) {
+    corrections = {};
+    for (const [key, value] of Object.entries(body.corrections as Record<string, unknown>)) {
+      if (key.length > 40) continue;
+      if (value === null || typeof value === 'number' || (typeof value === 'string' && value.length <= 300)) {
+        corrections[key] = value;
+      }
+    }
+    if (Object.keys(corrections).length === 0) corrections = null;
+  }
+
+  const excludedFromReports = typeof body.excludedFromReports === 'boolean' ? body.excludedFromReports : null;
+
+  if (corrections && entityIndex === null) throw new Error('entityIndex is required with corrections');
+  if (!corrections && excludedFromReports === null) throw new Error('Nothing to update');
+
+  return { entityIndex, corrections, excludedFromReports };
 }
 
 export function parseExportPayload(input: unknown) {
