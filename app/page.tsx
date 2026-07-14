@@ -50,7 +50,7 @@ import { LogFeedItem } from "@/components/log-feed-item";
 import { SettingsModal } from "@/components/settings-modal";
 import { Composer } from "@/components/composer";
 import { getCat } from "@/lib/categories";
-import { formatTimeAgo, uniqueClients, type Log, type Entities, type Widget, type UserSettings } from "@/lib/dashboard-utils";
+import { formatTimeAgo, uniqueClients, logAmount, logClients, logSentiment, type Log, type Widget, type UserSettings } from "@/lib/dashboard-utils";
 import { ReportsModal } from "@/components/reports-modal";
 
 export default function CodexApp() {
@@ -331,7 +331,7 @@ export default function CodexApp() {
         .map(function (l: Log) {
           return {
             date: new Date(l.timestamp).toLocaleDateString(),
-            value: (l.entities && l.entities.amount) || 0,
+            value: logAmount(l)?.amount || 0,
           };
         })
         .reverse();
@@ -347,13 +347,11 @@ export default function CodexApp() {
     }
     if (type === "metric") {
       const last = logs[0];
+      const amount = last ? logAmount(last) : null;
       return {
-        value:
-          last && last.entities && last.entities.amount != null
-            ? last.entities.amount
-            : logs.length,
-        unit: (last && last.entities && last.entities.currency) || "entries",
-        sentiment: last && last.entities && last.entities.sentiment,
+        value: amount ? amount.amount : logs.length,
+        unit: amount?.currency || "entries",
+        sentiment: last ? logSentiment(last) ?? undefined : undefined,
       };
     }
     return null;
@@ -364,7 +362,7 @@ export default function CodexApp() {
   });
   const filteredLogs = allLogs.filter(function (l: Log) {
     if (selectedCategory && l.category !== selectedCategory) return false;
-    if (selectedClient && l.entities?.client !== selectedClient) return false;
+    if (selectedClient && !logClients(l).includes(selectedClient)) return false;
     return true;
   });
   const uniqueCategories = Array.from(
@@ -776,7 +774,6 @@ export default function CodexApp() {
                       <LogFeedItem
                         key={log.id}
                         log={log}
-                        allLogs={allLogs}
                         onClick={function () {
                           setPreviewLog(log);
                         }}

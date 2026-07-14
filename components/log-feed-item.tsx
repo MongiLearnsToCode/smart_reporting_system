@@ -3,12 +3,11 @@
 import { motion } from "framer-motion";
 import { FileText, AlertTriangle, ChevronRight } from "lucide-react";
 import { getCat } from "@/lib/categories";
-import { formatTimeAgo, type Log } from "@/lib/dashboard-utils";
+import { formatTimeAgo, logAmount, logClients, logSentiment, logUrgency, type Log } from "@/lib/dashboard-utils";
 
-export function LogFeedItem({ log, onClick, allLogs }: {
+export function LogFeedItem({ log, onClick }: {
   log: Log;
   onClick: () => void;
-  allLogs: Log[];
 }) {
   const cat = getCat(log.category);
   const preview =
@@ -16,14 +15,18 @@ export function LogFeedItem({ log, onClick, allLogs }: {
       ? log.raw_content.slice(0, 80) + "…"
       : log.raw_content;
   const timeAgo = formatTimeAgo(log.timestamp);
+  const sentiment = logSentiment(log);
+  const urgency = logUrgency(log);
+  const amount = logAmount(log);
+  const client = logClients(log)[0];
   const sentBg =
-    log.entities && log.entities.sentiment === "positive"
+    sentiment === "positive"
       ? "bg-emerald-500/10 text-emerald-400"
-      : log.entities && log.entities.sentiment === "negative"
+      : sentiment === "negative"
         ? "bg-rose-500/10 text-rose-400"
         : "bg-zinc-800 text-zinc-500";
   const urgBg =
-    log.entities && log.entities.urgency === "high"
+    urgency === "high"
       ? "bg-rose-500/10 text-rose-400"
       : "bg-amber-500/10 text-amber-400";
 
@@ -41,9 +44,9 @@ export function LogFeedItem({ log, onClick, allLogs }: {
           <span className={"text-[11px] font-medium " + cat.text}>
             {log.category}
           </span>
-          {log.entities?.client ? (
+          {client ? (
             <span className="max-w-[90px] truncate rounded-full border border-zinc-800 px-1.5 py-px text-[10px] font-medium capitalize text-zinc-500">
-              {log.entities.client}
+              {client}
             </span>
           ) : null}
           {log.type === "file" ? (
@@ -58,34 +61,22 @@ export function LogFeedItem({ log, onClick, allLogs }: {
       <p className="text-xs text-zinc-400 leading-relaxed group-hover:text-zinc-300 transition-colors">
         {preview}
       </p>
-      {log.entities && log.entities.amount != null ? (
+      {amount ? (
         <p className="mt-2 font-mono text-[13px] font-medium text-zinc-100">
-          {(log.entities.currency || "$") + " "}
-          {Number(log.entities.amount).toLocaleString()}
+          {(amount.currency || "$") + " "}
+          {amount.amount.toLocaleString()}
         </p>
       ) : null}
       <div className="mt-2 flex items-center justify-between">
         <div className="flex gap-1.5">
-          {log.entities && log.entities.sentiment ? (
-            <span
-              className={
-                "rounded-full px-2 py-0.5 text-[10px] font-medium capitalize " +
-                sentBg
-              }
-            >
-              {log.entities.sentiment}
+          {sentiment ? (
+            <span className={"rounded-full px-2 py-0.5 text-[10px] font-medium capitalize " + sentBg}>
+              {sentiment}
             </span>
           ) : null}
-          {log.entities &&
-          log.entities.urgency &&
-          log.entities.urgency !== "low" ? (
-            <span
-              className={
-                "rounded-full px-2 py-0.5 text-[10px] font-medium capitalize " +
-                urgBg
-              }
-            >
-              {log.entities.urgency}
+          {urgency && urgency !== "low" ? (
+            <span className={"rounded-full px-2 py-0.5 text-[10px] font-medium capitalize " + urgBg}>
+              {urgency}
             </span>
           ) : null}
         </div>

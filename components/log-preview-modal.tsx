@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import { getCat } from "@/lib/categories";
 import { FilePreviewModal } from "@/components/file-preview-modal";
-import { type Log } from "@/lib/dashboard-utils";
+import { primaryEntity, type Log } from "@/lib/dashboard-utils";
 
 export function LogPreviewModal({ log, onClose, allLogs }: {
   log: Log | null;
@@ -18,7 +18,10 @@ export function LogPreviewModal({ log, onClose, allLogs }: {
   const [showAttachment, setShowAttachment] = useState(false);
   if (!log) return null;
   const cat = getCat(log.category);
-  const entities = log.entities || {};
+  const entities = (primaryEntity(log) ?? {}) as {
+    amount?: number | null; currency?: string | null; date?: string | null;
+    sentiment?: string | null; urgency?: string | null; names?: string[]; tags?: string[];
+  };
   const items = [];
   if (entities.amount != null)
     items.push({

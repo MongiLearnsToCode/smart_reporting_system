@@ -30,70 +30,8 @@ import {
 } from "recharts";
 import useUser from "@/utils/useUser";
 import Link from 'next/link';
-
-const CATEGORY_COLORS: Record<string, any> = {
-  Finance: {
-    bg: "bg-emerald-500/10",
-    text: "text-emerald-400",
-    dot: "bg-emerald-400",
-    border: "border-emerald-500/30",
-    chart: "#34d399",
-  },
-  Inventory: {
-    bg: "bg-amber-500/10",
-    text: "text-amber-400",
-    dot: "bg-amber-400",
-    border: "border-amber-500/30",
-    chart: "#fbbf24",
-  },
-  Projects: {
-    bg: "bg-blue-500/10",
-    text: "text-blue-400",
-    dot: "bg-blue-400",
-    border: "border-blue-500/30",
-    chart: "#60a5fa",
-  },
-  Clients: {
-    bg: "bg-purple-500/10",
-    text: "text-purple-400",
-    dot: "bg-purple-400",
-    border: "border-purple-500/30",
-    chart: "#a78bfa",
-  },
-  Tasks: {
-    bg: "bg-orange-500/10",
-    text: "text-orange-400",
-    dot: "bg-orange-400",
-    border: "border-orange-500/30",
-    chart: "#fb923c",
-  },
-  Team: {
-    bg: "bg-cyan-500/10",
-    text: "text-cyan-400",
-    dot: "bg-cyan-400",
-    border: "border-cyan-500/30",
-    chart: "#22d3ee",
-  },
-  Marketing: {
-    bg: "bg-pink-500/10",
-    text: "text-pink-400",
-    dot: "bg-pink-400",
-    border: "border-pink-500/30",
-    chart: "#f472b6",
-  },
-};
-
-function getCat(cat: string) {
-  return (
-    CATEGORY_COLORS[cat] || {
-      bg: "bg-zinc-500/10",
-      text: "text-zinc-400",
-      dot: "bg-zinc-400",
-      border: "border-zinc-500/30",
-      chart: "#a1a1aa",
-    }
-  );
-}
+import { getCatDetail } from "@/lib/categories";
+import { entitiesOf, logAmount, logSentiment, logUrgency, type Log, type LogEntity } from "@/lib/dashboard-utils";
 
 function StatCard({ icon: Icon, label, value, sub }: any) {
   return (
@@ -110,41 +48,36 @@ function StatCard({ icon: Icon, label, value, sub }: any) {
   );
 }
 
-function LogDetailCard({ log }: any) {
-  const entities = log.entities || {};
-  const entityRows = [
-    entities.amount != null && {
-      label: "Amount",
-      value: `${entities.currency || ""} ${entities.amount}`.trim(),
-    },
-    entities.date && {
-      label: "Date",
-      value: new Date(entities.date).toLocaleDateString(),
-    },
-    entities.sentiment && { label: "Sentiment", value: entities.sentiment },
-    entities.urgency && { label: "Urgency", value: entities.urgency },
-    entities.names?.length > 0 && {
-      label: "People",
-      value: entities.names.join(", "),
-    },
-    entities.tags?.length > 0 && {
-      label: "Tags",
-      value: entities.tags.join(", "),
-    },
-  ].filter(Boolean);
+function LogDetailCard({ log }: { log: Log }) {
+  const entities = entitiesOf(log);
+  const sentiment = logSentiment(log);
+  const urgency = logUrgency(log);
 
   const sentColor =
-    entities.sentiment === "positive"
+    sentiment === "positive"
       ? "text-emerald-400"
-      : entities.sentiment === "negative"
+      : sentiment === "negative"
         ? "text-rose-400"
         : "text-zinc-500";
   const urgColor =
-    entities.urgency === "high"
+    urgency === "high"
       ? "bg-rose-500/10 text-rose-400 border-rose-500/20"
-      : entities.urgency === "medium"
+      : urgency === "medium"
         ? "bg-amber-500/10 text-amber-400 border-amber-500/20"
         : "bg-zinc-800 text-zinc-500 border-zinc-700";
+
+  function entityRows(entity: LogEntity) {
+    return [
+      entity.amount != null && { label: "Amount", value: `${entity.currency || ""} ${entity.amount}`.trim() },
+      entity.date && { label: "Date", value: new Date(entity.date).toLocaleDateString() },
+      entity.client && { label: "Client", value: entity.client },
+      entity.project && { label: "Project", value: entity.project },
+      entity.task && { label: "Task", value: entity.task },
+      entity.status && { label: "Status", value: entity.status.replace("_", " ") },
+      entity.sentiment && { label: "Sentiment", value: entity.sentiment },
+      entity.urgency && { label: "Urgency", value: entity.urgency },
+    ].filter(Boolean) as Array<{ label: string; value: string }>;
+  }
 
   return (
     <motion.div
@@ -152,7 +85,6 @@ function LogDetailCard({ log }: any) {
       animate={{ opacity: 1, y: 0 }}
       className="rounded-2xl border border-zinc-800 bg-zinc-900/60 hover:border-zinc-700 hover:bg-zinc-900 transition-all"
     >
-      {/* Top bar */}
       <div className="flex items-center justify-between px-5 py-3 border-b border-zinc-800/60">
         <div className="flex items-center gap-3">
           <div className="h-7 w-7 rounded-xl bg-zinc-800 flex items-center justify-center">
@@ -178,22 +110,19 @@ function LogDetailCard({ log }: any) {
           ) : null}
         </div>
         <div className="flex items-center gap-2">
-          {entities.urgency && entities.urgency !== "low" ? (
-            <span
-              className={`text-[9px] font-black uppercase rounded-full px-2 py-0.5 border ${urgColor}`}
-            >
-              {entities.urgency}
+          {urgency && urgency !== "low" ? (
+            <span className={`text-[9px] font-black uppercase rounded-full px-2 py-0.5 border ${urgColor}`}>
+              {urgency}
             </span>
           ) : null}
-          {entities.sentiment ? (
+          {sentiment ? (
             <span className={`text-[10px] font-bold capitalize ${sentColor}`}>
-              {entities.sentiment}
+              {sentiment}
             </span>
           ) : null}
         </div>
       </div>
 
-      {/* Content */}
       <div className="px-5 py-4">
         <p className="text-sm text-zinc-200 leading-relaxed whitespace-pre-wrap">
           {log.raw_content}
@@ -210,22 +139,31 @@ function LogDetailCard({ log }: any) {
         ) : null}
       </div>
 
-      {/* Entity chips */}
-      {entityRows.length > 0 ? (
-        <div className="flex flex-wrap gap-2 px-5 pb-4">
-          {(entityRows as any).map(({ label, value }: any) => (
-            <div
-              key={label}
-              className="rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-1.5"
-            >
-              <span className="text-[9px] font-black uppercase tracking-widest text-zinc-600">
-                {label}:{" "}
-              </span>
-              <span className="text-[11px] font-semibold text-zinc-300 capitalize">
-                {value}
-              </span>
-            </div>
-          ))}
+      {entities.length > 0 ? (
+        <div className="space-y-2 px-5 pb-4">
+          {entities.map(function (entity, i) {
+            const rows = entityRows(entity);
+            if (rows.length === 0) return null;
+            return (
+              <div key={i} className="flex flex-wrap items-center gap-2">
+                {entities.length > 1 ? (
+                  <span className="rounded-xl border border-zinc-700 bg-zinc-800 px-2 py-1 text-[9px] font-black uppercase tracking-widest text-zinc-400">
+                    {entity.type.replace("_", " ")}
+                  </span>
+                ) : null}
+                {rows.map(({ label, value }) => (
+                  <div key={label} className="rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-1.5">
+                    <span className="text-[9px] font-black uppercase tracking-widest text-zinc-600">
+                      {label}:{" "}
+                    </span>
+                    <span className="text-[11px] font-semibold text-zinc-300 capitalize">
+                      {value}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            );
+          })}
         </div>
       ) : null}
     </motion.div>
@@ -235,7 +173,7 @@ function LogDetailCard({ log }: any) {
 export default function WidgetDetailPage({ params }: { params: Promise<{ category: string }> }) {
   const { category: rawCategory } = use(params);
   const category = decodeURIComponent(rawCategory);
-  const cat = getCat(category);
+  const cat = getCatDetail(category);
   const { data: user, loading: userLoading } = useUser();
   const [selectedSentiment, setSelectedSentiment] = useState<string | null>(null);
 
@@ -258,74 +196,59 @@ export default function WidgetDetailPage({ params }: { params: Promise<{ categor
     },
   });
 
-  const allLogs = (logsData && (logsData as any).logs) || [];
-  const logs = allLogs.filter(function (l: any) {
+  const allLogs: Log[] = (logsData && (logsData as any).logs) || [];
+  const logs = allLogs.filter(function (l: Log) {
     return l.category === category;
   });
 
   const filteredLogs = selectedSentiment
-    ? logs.filter(function (l: any) {
-        return l.entities && l.entities.sentiment === selectedSentiment;
+    ? logs.filter(function (l: Log) {
+        return logSentiment(l) === selectedSentiment;
       })
     : logs;
 
   // Stats
-  const totalAmount = logs.reduce(function (sum: number, l: any) {
-    return (
-      sum +
-      (l.entities && l.entities.amount != null ? Number(l.entities.amount) : 0)
-    );
-  }, 0);
-  const hasAmounts = logs.some(function (l: any) {
-    return l.entities && l.entities.amount != null;
-  });
-  const currency =
-    logs.find(function (l: any) {
-      return l.entities && l.entities.currency;
-    })?.entities?.currency || "$";
+  const amounts = logs.map(function (l: Log) { return logAmount(l); });
+  const totalAmount = amounts.reduce(function (sum: number, a) { return sum + (a ? a.amount : 0); }, 0);
+  const hasAmounts = amounts.some(Boolean);
+  const currency = amounts.find(function (a) { return a && a.currency; })?.currency || "$";
+
   const sentiments: Record<string, number> = { positive: 0, neutral: 0, negative: 0 };
-  logs.forEach(function (l: any) {
-    const s = l.entities && l.entities.sentiment;
+  logs.forEach(function (l: Log) {
+    const s = logSentiment(l);
     if (s && sentiments[s] !== undefined) sentiments[s]++;
   });
   const dominantSentiment = Object.entries(sentiments).sort(
     (a, b) => b[1] - a[1],
   )[0]?.[0];
-  const conflicts = logs.filter(function (l: any) {
+  const conflicts = logs.filter(function (l: Log) {
     return l.is_conflict;
   }).length;
 
   // Chart data — group by day
   const chartMap: Record<string, any> = {};
-  logs.forEach(function (l: any) {
-    const day = new Date(l.timestamp).toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-    });
+  logs.forEach(function (l: Log) {
+    const day = new Date(l.timestamp).toLocaleDateString("en-US", { month: "short", day: "numeric" });
     if (!chartMap[day]) chartMap[day] = { date: day, value: 0, count: 0 };
     chartMap[day].count++;
-    if (l.entities && l.entities.amount != null)
-      chartMap[day].value += Number(l.entities.amount);
+    const a = logAmount(l);
+    if (a) chartMap[day].value += a.amount;
   });
   const chartData = Object.values(chartMap).reverse();
 
   // All unique tags
-  const allTags = Array.from(
-    new Set(
-      logs.flatMap(function (l: any) {
-        return (l.entities && l.entities.tags) || [];
-      }),
-    ),
-  ).slice(0, 12) as string[];
+  const allTags = Array.from(new Set(
+    logs.flatMap(function (l: Log) {
+      return entitiesOf(l).flatMap(function (e) { return e.tags || []; });
+    }),
+  )).slice(0, 12) as string[];
 
   // All unique people/orgs
-  const allPeople = Array.from(
-    new Set(
-      logs.flatMap(function (l: any) {
-        return (l.entities && l.entities.names) || [];
-      }),
-    ),
-  ).slice(0, 10) as string[];
+  const allPeople = Array.from(new Set(
+    logs.flatMap(function (l: Log) {
+      return entitiesOf(l).flatMap(function (e) { return e.names || []; });
+    }),
+  )).slice(0, 10) as string[];
 
   if (userLoading || !user) {
     return (
@@ -604,7 +527,7 @@ export default function WidgetDetailPage({ params }: { params: Promise<{ categor
           ) : (
             <div className="space-y-3">
               <AnimatePresence initial={false}>
-                {filteredLogs.map(function (log: any) {
+                {filteredLogs.map(function (log: Log) {
                   return <LogDetailCard key={log.id} log={log} />;
                 })}
               </AnimatePresence>
