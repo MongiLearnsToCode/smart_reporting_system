@@ -1,6 +1,21 @@
 type Message = { role: 'system' | 'user' | 'assistant'; content: string };
 
-export async function callGroq(messages: Message[]) {
+export type GroqModel = 'llama-3.1-8b-instant' | 'llama-3.3-70b-versatile';
+
+const SHORT_TEXT_LIMIT = 300;
+
+/**
+ * Tiered routing: short plain-text logs go to the fast 8B model, anything
+ * complex (long text, file content) to the 70B. Deliberately no reasoning
+ * model — latency works against the 2s budget (see spec).
+ */
+export function pickExtractionModel(rawContent: string, type: 'text' | 'file'): GroqModel {
+  return type === 'text' && rawContent.length < SHORT_TEXT_LIMIT
+    ? 'llama-3.1-8b-instant'
+    : 'llama-3.3-70b-versatile';
+}
+
+export async function callGroq(messages: Message[], model: GroqModel = 'llama-3.3-70b-versatile') {
   const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) throw new Error('AI provider is not configured');
 
@@ -10,7 +25,7 @@ export async function callGroq(messages: Message[]) {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${apiKey}`,
     },
-    body: JSON.stringify({ model: 'llama-3.3-70b-versatile', messages, stream: false }),
+    body: JSON.stringify({ model, messages, stream: false }),
   });
 
   if (!res.ok) throw new Error(`AI provider request failed with status ${res.status}`);
