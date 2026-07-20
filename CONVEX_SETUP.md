@@ -63,11 +63,22 @@ Copy existing Supabase logs/widgets into Convex:
   client filter. `utils/convex/hooks.ts` wraps the block/log queries + mutations.
 - Verified: `npm run typecheck` clean; `npx convex dev --once` deploys all functions.
 
+## Done — Phase 5 (onboarding + trust)
+
+- `convex/blocks.ts` `seedStarter` + `app/onboarding/page.tsx` — spec §6 six work-type
+  starter canvas (Consultant/Freelancer, Small Business, Creative, Marketing Agency,
+  Online Seller, Other), laid out via `packGrid`. Replaces `/api/widgets/seed`.
+- `components/log-preview-modal.tsx` — now the Original Log Modal (spec §8): raw text,
+  timestamp, category, AI-confidence badge, extracted entities, corrections history, and
+  inline correct-category / exclude actions (`api.logs.applyCorrection` / `setExcluded`).
+  Derived blocks update reactively.
+
 ## Still to build (UI phases)
 
 - **Phase 4** — richer block types: `summary` (AI narrative via Groq action); `timeline`
   and `source_log` have interim renderings in the canvas already.
-- **Phase 5** — onboarding starter canvas (spec §6 six work-type mapping) +
-  Original Log Modal (spec §8).
 - **Phase 6** — report block-selector + `html-to-image`/`@react-pdf/renderer` export.
 - **Phase 8** — tiering + P1 (conversion, NL commands).
+
+> Note: `app/api/widgets/*` (seed/list/patch/delete) are now orphaned dead code — the
+> canvas + onboarding use Convex. Safe to delete in a cleanup pass.

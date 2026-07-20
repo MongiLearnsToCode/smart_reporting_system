@@ -50,6 +50,7 @@ export function convexLogToLog(doc: ConvexLogDoc): Log {
     is_conflict: doc.isConflict ?? false,
     conflict_source_id: doc.conflictSourceId ?? undefined,
     conflict_reason: doc.conflictReason ?? undefined,
+    corrections: doc.corrections,
     timestamp: new Date(doc.timestamp).toISOString(),
   };
 }

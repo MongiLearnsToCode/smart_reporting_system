@@ -4,11 +4,13 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   DollarSign, Calendar, TrendingUp, Zap, User, Tag,
-  FileText, MessageSquare, AlertTriangle, X,
+  FileText, MessageSquare, AlertTriangle, X, ShieldCheck, History, EyeOff, Eye,
 } from "lucide-react";
-import { getCat } from "@/lib/categories";
+import { toast } from "sonner";
+import { getCat, CATEGORIES } from "@/lib/categories";
 import { FilePreviewModal } from "@/components/file-preview-modal";
-import { primaryEntity, type Log } from "@/lib/dashboard-utils";
+import { primaryEntity, entitiesOf, type Log } from "@/lib/dashboard-utils";
+import { useLogMutations } from "@/utils/convex/hooks";
 
 export function LogPreviewModal({ log, onClose, allLogs }: {
   log: Log | null;
@@ -16,8 +18,31 @@ export function LogPreviewModal({ log, onClose, allLogs }: {
   allLogs: Log[];
 }) {
   const [showAttachment, setShowAttachment] = useState(false);
+  const { applyCorrection, setExcluded } = useLogMutations();
   if (!log) return null;
   const cat = getCat(log.category);
+  const confidencePct = log.ai_confidence != null ? Math.round(log.ai_confidence * 100) : null;
+  const allEntities = entitiesOf(log);
+
+  async function correctCategory(newCategory: string) {
+    if (!log || newCategory === log.category) return;
+    try {
+      await applyCorrection({ id: log.id as never, field: "category", to: newCategory, category: newCategory });
+      toast.success("Category corrected — derived blocks will update");
+    } catch {
+      toast.error("Could not apply correction");
+    }
+  }
+
+  async function toggleExcluded() {
+    if (!log) return;
+    try {
+      await setExcluded({ id: log.id as never, excluded: !log.excluded_from_reports });
+      toast.success(log.excluded_from_reports ? "Included in reports" : "Excluded from reports");
+    } catch {
+      toast.error("Could not update");
+    }
+  }
   const entities = (primaryEntity(log) ?? {}) as {
     amount?: number | null; currency?: string | null; date?: string | null;
     sentiment?: string | null; urgency?: string | null; names?: string[]; tags?: string[];
@@ -95,6 +120,19 @@ export function LogPreviewModal({ log, onClose, allLogs }: {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              {confidencePct != null ? (
+                <div
+                  className={
+                    "flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-medium " +
+                    (confidencePct >= 70
+                      ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+                      : "border-amber-500/30 bg-amber-500/10 text-amber-400")
+                  }
+                  title="AI extraction confidence"
+                >
+                  <ShieldCheck size={10} /> {confidencePct}%
+                </div>
+              ) : null}
               {log.is_conflict ? (
                 <div className="flex items-center gap-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 px-2.5 py-0.5 text-[11px] font-medium text-amber-400">
                   <AlertTriangle size={10} /> Conflict
@@ -156,6 +194,9 @@ export function LogPreviewModal({ log, onClose, allLogs }: {
           <div className="px-6 py-5">
             <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-zinc-500 mb-3">
               Extracted Data
+              {allEntities.length > 1 ? (
+                <span className="ml-1.5 font-mono text-zinc-600">· {allEntities.length} entities</span>
+              ) : null}
             </p>
             <div className="grid grid-cols-2 gap-3">
               {items.map(function (item) {
@@ -180,6 +221,58 @@ export function LogPreviewModal({ log, onClose, allLogs }: {
             </div>
           </div>
         ) : null}
+
+        {log.corrections && log.corrections.length > 0 ? (
+          <div className="px-6 py-4 border-b border-zinc-800/80">
+            <div className="mb-2 flex items-center gap-1.5">
+              <History size={11} className="text-zinc-500" />
+              <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-zinc-500">
+                Corrections applied
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              {log.corrections.map((c, i) => (
+                <div key={i} className="flex items-center gap-2 text-[11px] text-zinc-400">
+                  <span className="font-medium text-zinc-300 capitalize">{c.field}</span>
+                  <span className="text-zinc-600">{String(c.from ?? "—")}</span>
+                  <span className="text-zinc-600">→</span>
+                  <span className="text-zinc-200">{String(c.to ?? "—")}</span>
+                  <span className="ml-auto font-mono text-[10px] text-zinc-600">
+                    {new Date(c.at).toLocaleDateString()}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        {/* Trust actions — correct or exclude directly from the modal (spec §8). */}
+        <div className="flex items-center justify-between gap-3 px-6 py-4">
+          <label className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-zinc-500">
+            Category
+            <select
+              value={CATEGORIES.includes(log.category as never) ? log.category : "Other"}
+              onChange={(e) => correctCategory(e.target.value)}
+              className="rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 text-[12px] font-normal normal-case text-zinc-200 outline-none focus:border-zinc-600"
+            >
+              {CATEGORIES.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+          </label>
+          <button
+            onClick={toggleExcluded}
+            className={
+              "flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition-colors " +
+              (log.excluded_from_reports
+                ? "border-zinc-700 bg-zinc-800 text-zinc-300 hover:text-white"
+                : "border-zinc-800 text-zinc-500 hover:border-zinc-700 hover:text-zinc-300")
+            }
+            title="Toggle whether this log feeds blocks and reports"
+          >
+            {log.excluded_from_reports ? <><Eye size={12} /> Include</> : <><EyeOff size={12} /> Exclude</>}
+          </button>
+        </div>
       </motion.div>
     </motion.div>
     <AnimatePresence>

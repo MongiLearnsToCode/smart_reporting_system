@@ -72,6 +72,7 @@ export type Log = {
   is_conflict: boolean;
   conflict_source_id?: string;
   conflict_reason?: string;
+  corrections?: { field: string; from: unknown; to: unknown; at: number }[];
   timestamp: string;
 };
 

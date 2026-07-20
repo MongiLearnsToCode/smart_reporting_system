@@ -2,7 +2,59 @@ import { mutation, query, internalMutation } from './_generated/server';
 import { v } from 'convex/values';
 import { blockType, layoutValidator, queryConfigValidator } from './schema';
 import { requireUserId, optionalUserId } from './lib/identity';
-import { defaultLayoutFor, nextFreeRow, MIN_W, MIN_H } from './lib/layout';
+import { defaultLayoutFor, nextFreeRow, packGrid, MIN_W, MIN_H } from './lib/layout';
+
+type Starter = { type: 'metric' | 'chart' | 'list' | 'timeline' | 'summary' | 'source_log'; title: string; category?: string };
+
+// Spec §6 starter-canvas mapping. Each work type yields a fixed set of blocks,
+// each backed by a category so it fills with real data as the user logs.
+const STARTER_CANVAS: Record<string, Starter[]> = {
+  consultant_freelancer: [
+    { type: 'list', title: 'Client Updates', category: 'Clients' },
+    { type: 'list', title: 'Open Tasks', category: 'Tasks' },
+    { type: 'timeline', title: 'Project Progress', category: 'Projects' },
+    { type: 'chart', title: 'Expenses', category: 'Finance' },
+    { type: 'summary', title: 'Weekly Summary' },
+  ],
+  small_business: [
+    { type: 'list', title: 'Daily Operations', category: 'Operations' },
+    { type: 'chart', title: 'Expenses', category: 'Finance' },
+    { type: 'metric', title: 'Sales / Revenue', category: 'Finance' },
+    { type: 'list', title: 'Inventory Notes', category: 'Operations' },
+    { type: 'list', title: 'Issues / Risks', category: 'Operations' },
+    { type: 'summary', title: 'Weekly Summary' },
+  ],
+  creative: [
+    { type: 'timeline', title: 'Active Projects', category: 'Projects' },
+    { type: 'list', title: 'Deliverables', category: 'Projects' },
+    { type: 'list', title: 'Client Feedback', category: 'Clients' },
+    { type: 'chart', title: 'Expenses', category: 'Finance' },
+    { type: 'list', title: 'Risks / Blockers', category: 'Projects' },
+    { type: 'summary', title: 'Weekly Summary' },
+  ],
+  marketing_agency: [
+    { type: 'list', title: 'Campaign Updates', category: 'Marketing' },
+    { type: 'list', title: 'Client Feedback', category: 'Clients' },
+    { type: 'list', title: 'Deliverables', category: 'Projects' },
+    { type: 'list', title: 'Content Tasks', category: 'Tasks' },
+    { type: 'metric', title: 'Performance Notes', category: 'Marketing' },
+    { type: 'summary', title: 'Weekly Report Summary' },
+  ],
+  online_seller: [
+    { type: 'list', title: 'Sales Notes', category: 'Finance' },
+    { type: 'list', title: 'Inventory Updates', category: 'Operations' },
+    { type: 'list', title: 'Customer Feedback', category: 'Clients' },
+    { type: 'chart', title: 'Marketing Expenses', category: 'Marketing' },
+    { type: 'list', title: 'Operational Issues', category: 'Operations' },
+    { type: 'summary', title: 'Weekly Summary' },
+  ],
+  other: [
+    { type: 'list', title: 'Tasks', category: 'Tasks' },
+    { type: 'list', title: 'Notes', category: 'Other' },
+    { type: 'chart', title: 'Expenses', category: 'Finance' },
+    { type: 'summary', title: 'Weekly Summary' },
+  ],
+};
 
 // How long a soft-deleted block lingers before hard purge (spec §4: 5s undo).
 // Kept generously above the client toast window to avoid races.
@@ -55,6 +107,37 @@ export const create = mutation({
       createdAt: Date.now(),
       deletedAt: null,
     });
+  },
+});
+
+// Seeds the onboarding starter canvas for a declared work type (spec §6).
+// No-ops if the user already has blocks, so it is safe to call more than once.
+export const seedStarter = mutation({
+  args: { workType: v.string() },
+  handler: async (ctx, { workType }) => {
+    const userId = await requireUserId(ctx);
+    const existing = await listUserBlocks(ctx, userId);
+    if (existing.some((b: any) => !b.deletedAt)) return { seeded: 0 };
+
+    const starters = STARTER_CANVAS[workType] ?? STARTER_CANVAS.other;
+    const layouts = packGrid(starters.map((s) => s.type));
+    const now = Date.now();
+    for (let i = 0; i < starters.length; i++) {
+      const s = starters[i];
+      await ctx.db.insert('canvasBlocks', {
+        userId,
+        type: s.type,
+        title: s.title,
+        queryConfig: s.category ? { category: s.category } : {},
+        layout: layouts[i],
+        visible: true,
+        pinned: false,
+        includeInReports: true,
+        createdAt: now,
+        deletedAt: null,
+      });
+    }
+    return { seeded: starters.length };
   },
 });
 

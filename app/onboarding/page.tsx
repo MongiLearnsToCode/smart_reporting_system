@@ -1,40 +1,36 @@
 'use client';
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { motion } from "framer-motion";
 import {
   Briefcase,
   Heart,
-  Code,
+  Megaphone,
   ShoppingBag,
-  Globe,
-  MessageSquare,
+  Store,
+  LayoutGrid,
 } from "lucide-react";
-import { csrfFetch, ensureCsrfToken } from "@/utils/api/csrf";
+import { useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
 
+// Spec §6 work types — each maps to a starter-canvas preset in convex/blocks.ts.
 const OPTIONS = [
-  { id: "solo", label: "Solo Founder", icon: Briefcase, chip: "bg-blue-500/15 text-blue-400" },
-  { id: "freelance", label: "Freelancer", icon: Globe, chip: "bg-emerald-500/15 text-emerald-400" },
-  { id: "consultant", label: "Consultant", icon: MessageSquare, chip: "bg-violet-500/15 text-violet-400" },
-  { id: "retail", label: "E-commerce", icon: ShoppingBag, chip: "bg-rose-500/15 text-rose-400" },
+  { id: "consultant_freelancer", label: "Consultant / Freelancer", icon: Briefcase, chip: "bg-violet-500/15 text-violet-400" },
+  { id: "small_business", label: "Small Business Owner", icon: Store, chip: "bg-blue-500/15 text-blue-400" },
   { id: "creative", label: "Creative Professional", icon: Heart, chip: "bg-amber-500/15 text-amber-400" },
-  { id: "dev", label: "Software Engineer", icon: Code, chip: "bg-zinc-500/15 text-zinc-400" },
+  { id: "marketing_agency", label: "Marketing / Content Agency", icon: Megaphone, chip: "bg-pink-500/15 text-pink-400" },
+  { id: "online_seller", label: "Online Seller / E-commerce", icon: ShoppingBag, chip: "bg-rose-500/15 text-rose-400" },
+  { id: "other", label: "Other", icon: LayoutGrid, chip: "bg-zinc-500/15 text-zinc-400" },
 ];
 
 export default function Onboarding() {
   const [loading, setLoading] = useState(false);
-
-  useEffect(function () { ensureCsrfToken(); }, []);
+  const seedStarter = useMutation(api.blocks.seedStarter);
 
   const handleSelect = async (option: string) => {
     setLoading(true);
     try {
-      // Seed initial widgets based on industry
-      await csrfFetch("/api/widgets/seed", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ industry: option }),
-      });
+      await seedStarter({ workType: option });
       window.location.href = "/"; // Use standard navigation
     } catch (error) {
       console.error(error);

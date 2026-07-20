@@ -18,6 +18,27 @@ export function nextFreeRow(blocks: Pick<Doc<'canvasBlocks'>, 'layout' | 'delete
   return maxBottom;
 }
 
+// Packs a list of blocks left-to-right across the 12-col grid, wrapping rows.
+// Used to lay out a starter canvas (spec §6) without overlaps.
+export function packGrid(types: string[]): Layout[] {
+  const out: Layout[] = [];
+  let x = 0;
+  let y = 0;
+  let rowH = 0;
+  for (const type of types) {
+    const { w, h } = defaultLayoutFor(type, 0);
+    if (x + w > GRID_COLS) {
+      x = 0;
+      y += rowH;
+      rowH = 0;
+    }
+    out.push({ x, y, w, h });
+    x += w;
+    rowH = Math.max(rowH, h);
+  }
+  return out;
+}
+
 // Default size per block type, tuned so starter canvases read well.
 export function defaultLayoutFor(type: string, y: number): Layout {
   switch (type) {
