@@ -1,5 +1,4 @@
 import { createClient } from '@/utils/supabase/server';
-import { createAdminClient } from '@/utils/supabase/admin';
 import { NextRequest, NextResponse } from 'next/server';
 import { assertSameOrigin, getClientIp, rateLimit, requireCsrf, toErrorResponse } from '@/utils/api/guards';
 import { callGroq, extractJson, pickExtractionModel } from '@/utils/api/groq';
@@ -7,7 +6,9 @@ import { DEFAULT_SETTINGS, parseProcessPayload } from '@/utils/api/validation';
 import { normalizeEntities, overallConfidence, primaryCategory, statusFor } from '@/utils/api/entity-normalizer';
 import { resolveDateReference } from '@/utils/api/date-reference';
 import { CATEGORIES } from '@/lib/categories';
-import { entitiesOf, ENTITY_TYPES, type Log, type LogEntity } from '@/lib/dashboard-utils';
+import { ENTITY_TYPES, type LogEntity } from '@/lib/dashboard-utils';
+import { convexForUser } from '@/utils/convex/serverClient';
+import { api } from '@/convex/_generated/api';
 
 export async function POST(request: NextRequest) {
   try {
@@ -17,31 +18,27 @@ export async function POST(request: NextRequest) {
 
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!user || !session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const admin = createAdminClient();
+    // Convex is the log/block store; authenticate it as this user (spec §7).
+    const convex = convexForUser(session.access_token);
     const parsed = parseProcessPayload(await request.json());
-    const userId = user.id;
 
-    // Retry path: reuse the stored raw content and update the same row.
+    // Retry path: reuse the stored raw content and overwrite the same Convex doc.
     let { rawContent, type, fileUrl } = parsed;
     let retryLogId: string | null = null;
     if (parsed.logId) {
-      const { data: row, error: fetchError } = await admin
-        .from('logs')
-        .select('id, raw_content, type, file_url')
-        .eq('id', parsed.logId)
-        .eq('user_id', userId)
-        .single();
-      if (fetchError || !row) {
+      const row = await convex.query(api.logs.getById, { id: parsed.logId as any });
+      if (!row) {
         return NextResponse.json({ error: 'Log not found' }, { status: 404 });
       }
-      retryLogId = row.id;
-      rawContent = row.raw_content;
+      retryLogId = row._id;
+      rawContent = row.rawContent;
       type = row.type === 'file' ? 'file' : 'text';
-      fileUrl = row.file_url;
+      fileUrl = row.fileUrl ?? null;
     }
 
     // Settings live in auth user_metadata; the user_settings table has no grants.
@@ -51,21 +48,7 @@ export async function POST(request: NextRequest) {
     const conflictDetection = settings.conflict_detection !== false;
     const conflictDismissDays = settings.conflict_dismiss_days ?? 7;
 
-    // Known clients: flatten entity arrays in JS (entities->client stopped
-    // working when entities became an array).
-    const { data: clientRows } = await admin
-      .from('logs')
-      .select('category, entities')
-      .eq('user_id', userId)
-      .order('timestamp', { ascending: false })
-      .limit(100);
-    const knownClients: string[] = [];
-    for (const row of clientRows ?? []) {
-      for (const entity of entitiesOf(row as Log)) {
-        const client = typeof entity.client === 'string' ? entity.client.trim() : '';
-        if (client && !knownClients.includes(client)) knownClients.push(client);
-      }
-    }
+    const knownClients: string[] = await convex.query(api.logs.knownClients, {});
 
     const submittedAt = new Date();
     const systemPrompt = [
@@ -105,26 +88,20 @@ export async function POST(request: NextRequest) {
 
     // Failure path: save the log anyway so nothing is lost; the feed offers a retry.
     if (!entities) {
-      const failedFields = {
+      const logId = await convex.mutation(api.logs.ingest, {
+        logId: (retryLogId ?? undefined) as any,
+        rawContent,
+        type,
+        fileUrl: fileUrl ?? null,
         category: 'Other',
-        entities: [] as LogEntity[],
-        ai_confidence: null,
-        processing_status: 'failed',
-        is_conflict: false,
-        conflict_source_id: null,
-        conflict_reason: null,
-      };
-      const { data: savedLog, error: saveError } = retryLogId
-        ? await admin.from('logs').update(failedFields).eq('id', retryLogId).eq('user_id', userId).select().single()
-        : await admin.from('logs').insert({
-            user_id: userId,
-            raw_content: rawContent,
-            type,
-            file_url: fileUrl ?? null,
-            ...failedFields,
-          }).select().single();
-      if (saveError) throw saveError;
-      return NextResponse.json({ success: true, extractionFailed: true, log: savedLog });
+        entities: [],
+        aiConfidence: null,
+        processingStatus: 'failed',
+        isConflict: false,
+        conflictSourceId: null,
+        conflictReason: null,
+      });
+      return NextResponse.json({ success: true, extractionFailed: true, logId });
     }
 
     // Deterministic date resolution overrides the model's guess when the reference parses.
@@ -137,28 +114,22 @@ export async function POST(request: NextRequest) {
     const category = primaryCategory(entities);
     const processingStatus = statusFor(aiConfidence);
 
-    // Conflict detection: unchanged, keyed off the primary category.
-    const windowStart = new Date(Date.now() - conflictDismissDays * 86400000).toISOString();
-    let recentLogs: Array<{ id: string; raw_content: string }> | null = null;
+    // Conflict detection: unchanged logic, recent logs now read from Convex.
+    let recentLogs: Array<{ id: string; rawContent: string }> = [];
     if (conflictDetection) {
-      let recentQuery = admin
-        .from('logs')
-        .select('id, raw_content')
-        .eq('user_id', userId)
-        .eq('category', category)
-        .gte('timestamp', windowStart)
-        .order('timestamp', { ascending: false })
-        .limit(5);
-      if (retryLogId) recentQuery = recentQuery.neq('id', retryLogId);
-      ({ data: recentLogs } = await recentQuery);
+      recentLogs = await convex.query(api.logs.recentInCategory, {
+        category,
+        sinceMs: Date.now() - conflictDismissDays * 86400000,
+        excludeId: (retryLogId ?? undefined) as any,
+      });
     }
 
     let isConflict = false;
     let conflictSourceId: string | null = null;
     let conflictReason: string | null = null;
 
-    if (conflictDetection && recentLogs && recentLogs.length > 0) {
-      const comparisons = recentLogs.map((l, i) => `[${i + 1}] ${l.raw_content}`).join('\n\n');
+    if (conflictDetection && recentLogs.length > 0) {
+      const comparisons = recentLogs.map((l, i) => `[${i + 1}] ${l.rawContent}`).join('\n\n');
       const similarityPrompt = `You are a duplicate-detection assistant. Compare the NEW entry against each EXISTING entry and return ONLY valid JSON.
 
 NEW ENTRY:
@@ -193,48 +164,23 @@ Return: { "duplicate": boolean, "source_index": number | null, "reason": string 
       }
     }
 
-    const logFields = {
+    // Single reactive write: persists the log AND auto-creates a category block
+    // if none exists (spec §6). Subscribers see the update within the §7 budget.
+    const logId = await convex.mutation(api.logs.ingest, {
+      logId: (retryLogId ?? undefined) as any,
+      rawContent,
+      type,
+      fileUrl: fileUrl ?? null,
       category,
       entities,
-      ai_confidence: aiConfidence,
-      processing_status: processingStatus,
-      is_conflict: isConflict,
-      conflict_source_id: conflictSourceId,
-      conflict_reason: conflictReason,
-    };
-    const { data: savedLog, error: insertError } = retryLogId
-      ? await admin.from('logs').update(logFields).eq('id', retryLogId).eq('user_id', userId).select().single()
-      : await admin.from('logs').insert({
-          user_id: userId,
-          raw_content: rawContent,
-          type,
-          file_url: fileUrl ?? null,
-          ...logFields,
-        }).select().single();
+      aiConfidence,
+      processingStatus,
+      isConflict,
+      conflictSourceId,
+      conflictReason,
+    });
 
-    if (insertError) throw insertError;
-
-    // Ensure a widget exists for the primary category.
-    const { data: existingWidgets } = await admin
-      .from('widgets')
-      .select('id')
-      .eq('user_id', userId)
-      .contains('config', { category });
-
-    if (!existingWidgets?.length) {
-      let widgetType = 'metric';
-      if (category === 'Finance') widgetType = 'chart';
-      if (category === 'Tasks') widgetType = 'list';
-
-      await admin.from('widgets').insert({
-        user_id: userId,
-        type: widgetType,
-        title: category,
-        config: { category, w: 4, h: 2, x: 0, y: 0 },
-      });
-    }
-
-    return NextResponse.json({ success: true, log: savedLog });
+    return NextResponse.json({ success: true, logId });
   } catch (error) {
     console.error('api/process error:', error);
     if (error instanceof Error && /required|too long/.test(error.message)) {

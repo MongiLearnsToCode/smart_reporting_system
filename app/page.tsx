@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -11,7 +11,6 @@ import {
   History,
   AlertCircle,
   Users,
-  Package,
   MessageSquare,
   Clock,
   X,
@@ -21,8 +20,7 @@ import {
   User,
   ScrollText,
   PinOff,
-  LogOut, Sun, Moon, Trash2, Pencil,
-  ArrowUpDown,
+  LogOut, Sun, Moon,
   Settings,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -42,15 +40,15 @@ import useUser from "@/utils/useUser";
 import { toast } from "sonner";
 import { useTheme } from "next-themes";
 import { csrfFetch, ensureCsrfToken } from "@/utils/api/csrf";
-import { MetricCard } from "@/components/metric-card";
-import { ChartWidget } from "@/components/chart-widget";
-import { ListWidget } from "@/components/list-widget";
 import { LogPreviewModal } from "@/components/log-preview-modal";
 import { LogFeedItem } from "@/components/log-feed-item";
 import { SettingsModal } from "@/components/settings-modal";
 import { Composer } from "@/components/composer";
+import { BlockCanvas } from "@/components/block-canvas";
 import { getCat } from "@/lib/categories";
-import { formatTimeAgo, uniqueClients, logAmount, logClients, logSentiment, type Log, type Widget, type UserSettings } from "@/lib/dashboard-utils";
+import { uniqueClients, logClients, type Log, type UserSettings } from "@/lib/dashboard-utils";
+import { useBlocks, useLogs, useLogMutations } from "@/utils/convex/hooks";
+import type { ConvexBlockDoc } from "@/utils/convex/adapters";
 import { ReportsModal } from "@/components/reports-modal";
 
 export default function CodexApp() {
@@ -75,7 +73,7 @@ export default function CodexApp() {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
   const abortRef = useRef<AbortController | null>(null);
-  const [widgetSort, setWidgetSort] = useState<"title" | "created" | "recent">("title");
+  const [sourceBlock, setSourceBlock] = useState<ConvexBlockDoc | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const { theme, setTheme } = useTheme();
   const userMenuRef = useRef<HTMLDivElement>(null);
@@ -100,63 +98,27 @@ export default function CodexApp() {
     [user, userLoading],
   );
 
-  const [allLogs, setAllLogs] = useState<Log[]>([]);
-  const [hasMoreLogs, setHasMoreLogs] = useState(false);
-  const [logsCursor, setLogsCursor] = useState<string | null>(null);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  // Convex is the reactive source for logs + blocks (spec §7). No manual
+  // refetching — subscriptions push updates within the 2s SLA.
+  const { logs: allLogsRaw } = useLogs();
+  const { blocks } = useBlocks();
+  const logMutations = useLogMutations();
 
-  const logsQuery = useQuery({
-    queryKey: ["logs", timeValue],
-    enabled: !!user,
-    queryFn: async function () {
-      const targetDate =
-        timeValue < 100
-          ? new Date(Date.now() - (100 - timeValue) * 86400000).toISOString()
-          : null;
-      const url = targetDate
-        ? "/api/logs?limit=50&before=" + encodeURIComponent(targetDate)
-        : "/api/logs?limit=50";
-      const res = await fetch(url);
-      return res.json();
+  // Time-travel slider filters the feed/canvas client-side to a past snapshot.
+  const allLogs = useMemo(
+    function () {
+      if (timeValue >= 100) return allLogsRaw;
+      const snapshot = Date.now() - (100 - timeValue) * 86400000;
+      return allLogsRaw.filter((l) => new Date(l.timestamp).getTime() <= snapshot);
     },
-  });
+    [allLogsRaw, timeValue],
+  );
 
-  useEffect(function () {
-    const data = logsQuery.data;
-    if (!data) return;
-    setAllLogs(data.logs || []);
-    setHasMoreLogs(data.hasMore ?? false);
-    const logs = data.logs;
-    setLogsCursor(logs && logs.length > 0 ? logs[logs.length - 1].timestamp : null);
-  }, [logsQuery.data]);
-
-  async function loadMoreLogs() {
-    if (!logsCursor || isLoadingMore) return;
-    setIsLoadingMore(true);
-    try {
-      const res = await fetch("/api/logs?limit=50&before=" + encodeURIComponent(logsCursor));
-      const data = await res.json();
-      const newLogs: Log[] = data.logs || [];
-      setAllLogs(function (prev) { return [...prev, ...newLogs]; });
-      setHasMoreLogs(data.hasMore ?? false);
-      if (newLogs.length > 0) {
-        setLogsCursor(newLogs[newLogs.length - 1].timestamp);
-      } else {
-        setHasMoreLogs(false);
-      }
-    } finally {
-      setIsLoadingMore(false);
-    }
-  }
-
-  const widgetsQuery = useQuery({
-    queryKey: ["widgets"],
-    enabled: !!user,
-    queryFn: async function () {
-      const res = await fetch("/api/widgets");
-      return res.json();
-    },
-  });
+  // Pagination is obsolete under Convex reactivity; keep stubs so the feed JSX
+  // renders unchanged.
+  const hasMoreLogs = false;
+  const isLoadingMore = false;
+  function loadMoreLogs() {}
 
   const settingsQuery = useQuery({
     queryKey: ["settings"],
@@ -180,9 +142,6 @@ export default function CodexApp() {
     },
     onSuccess: function (data: { settings?: UserSettings }) {
       queryClient.setQueryData(["settings"], data);
-      if (data.settings?.default_widget_sort) {
-        setWidgetSort(data.settings.default_widget_sort);
-      }
     },
   });
 
@@ -202,11 +161,7 @@ export default function CodexApp() {
       }
       return res.json();
     },
-    onSuccess: function () {
-      queryClient.invalidateQueries({ queryKey: ["logs"] });
-      queryClient.invalidateQueries({ queryKey: ["widgets"] });
-      queryClient.invalidateQueries({ queryKey: ["categories"] });
-    },
+    // Convex reactivity updates the canvas + feed; no cache invalidation needed.
     onError: function (err) {
       if (err instanceof DOMException && err.name === "AbortError") return;
       console.error("Process error:", err);
@@ -214,45 +169,7 @@ export default function CodexApp() {
     },
   });
 
-  const [editingWidgetId, setEditingWidgetId] = useState<string | null>(null);
-  const [editingTitle, setEditingTitle] = useState("");
-
-  const deleteWidgetMutation = useMutation({
-    mutationFn: async function (widgetId: string) {
-      const res = await csrfFetch("/api/widgets/" + widgetId, { method: "DELETE" });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Failed to delete widget");
-      }
-    },
-    onSuccess: function () { queryClient.invalidateQueries({ queryKey: ["widgets"] }); },
-  });
-
-  const renameWidgetMutation = useMutation({
-    mutationFn: async function ({ widgetId, title }: { widgetId: string; title: string }) {
-      const res = await csrfFetch("/api/widgets/" + widgetId, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title }),
-      });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Failed to rename widget");
-      }
-    },
-    onSuccess: function () { queryClient.invalidateQueries({ queryKey: ["widgets"] }); },
-  });
-
-  const widgetsData = widgetsQuery.data;
   const userSettings = (settingsQuery.data && settingsQuery.data.settings) || {};
-
-  // Apply saved default sort on first load
-  useEffect(function () {
-    if (userSettings.default_widget_sort) {
-      setWidgetSort(userSettings.default_widget_sort);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settingsQuery.dataUpdatedAt]);
 
   function handleFilesAdded(newFiles: File[]) {
     setFiles(function (prev) { return [...prev, ...newFiles]; });
@@ -322,41 +239,6 @@ export default function CodexApp() {
     }
   }
 
-  function getWidgetData(category: string, type: string) {
-    const logs = allLogs.filter(function (l: Log) {
-      return l.category === category;
-    });
-    if (type === "chart") {
-      return logs
-        .map(function (l: Log) {
-          return {
-            date: new Date(l.timestamp).toLocaleDateString(),
-            value: logAmount(l)?.amount || 0,
-          };
-        })
-        .reverse();
-    }
-    if (type === "list") {
-      return logs.map(function (l: Log) {
-        return {
-          text: l.raw_content,
-          completed: false,
-          date: new Date(l.timestamp).toLocaleDateString(),
-        };
-      });
-    }
-    if (type === "metric") {
-      const last = logs[0];
-      const amount = last ? logAmount(last) : null;
-      return {
-        value: amount ? amount.amount : logs.length,
-        unit: amount?.currency || "entries",
-        sentiment: last ? logSentiment(last) ?? undefined : undefined,
-      };
-    }
-    return null;
-  }
-
   const conflicts = allLogs.filter(function (l: Log) {
     return l.is_conflict;
   });
@@ -375,12 +257,11 @@ export default function CodexApp() {
   const clients = uniqueClients(allLogs);
 
   async function handleRevert(logId: string) {
-    const res = await csrfFetch("/api/logs/" + logId, { method: "DELETE" });
-    if (!res.ok) {
+    try {
+      await logMutations.remove({ id: logId as never });
+    } catch {
       toast.error("Could not revert conflict");
-      return;
     }
-    queryClient.invalidateQueries({ queryKey: ["logs"] });
   }
 
   if (userLoading || !user) {
@@ -397,19 +278,6 @@ export default function CodexApp() {
       </div>
     );
   }
-
-  const widgets: Widget[] = [...((widgetsData && widgetsData.widgets) || [])].sort(function (a: Widget, b: Widget) {
-    if (widgetSort === "title") return a.title.localeCompare(b.title);
-    if (widgetSort === "created") return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-    if (widgetSort === "recent") {
-      const lastLog = (cat: string) => {
-        const logs = allLogs.filter((l: Log) => l.category === cat);
-        return logs.length ? new Date(logs[0].timestamp).getTime() : 0;
-      };
-      return lastLog(b.config?.category) - lastLog(a.config?.category);
-    }
-    return 0;
-  });
 
   return (
     <div className="flex h-screen w-full flex-col bg-black text-zinc-100 font-sans selection:bg-white selection:text-black">
@@ -559,106 +427,7 @@ export default function CodexApp() {
               ).toLocaleDateString()}
             </motion.div>
           ) : null}
-          <div className={`columns-1 md:columns-2 xl:columns-3 ${userSettings.canvas_density === "compact" ? "gap-3 space-y-3" : "gap-5 space-y-5"}`}>
-            {widgets.length > 0 ? (
-              <div className="break-inside-avoid mb-1 flex items-center justify-end">
-                <div className="flex items-center gap-1.5 rounded-full border border-zinc-800 bg-zinc-900 p-1">
-                  <ArrowUpDown size={11} className="text-zinc-600 ml-1.5" />
-                  {(["title", "created", "recent"] as const).map((opt) => (
-                    <button
-                      key={opt}
-                      onClick={() => setWidgetSort(opt)}
-                      className={`rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-widest transition-all ${
-                        widgetSort === opt
-                          ? "bg-zinc-700 text-white"
-                          : "text-zinc-500 hover:text-zinc-300"
-                      }`}
-                    >
-                      {opt === "title" ? "A–Z" : opt === "created" ? "Created" : "Recent"}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-            {widgets.map(function (widget: Widget) {
-              const data = getWidgetData(
-                widget.config && widget.config.category,
-                widget.type,
-              );
-              const handleClick = function () {
-                const cat = widget.config && widget.config.category;
-                if (cat)
-                  window.location.href = "/widget/" + encodeURIComponent(cat);
-              };
-              const chartData = (data || []) as Array<{ date: string; value: number }>;
-              const listData = (data || []) as Array<{ text: string; completed: boolean; date: string }>;
-              const metricData = data as { value?: number; unit?: string; sentiment?: string } | null;
-              const isEditing = editingWidgetId === widget.id;
-              return (
-                <div key={widget.id} className="break-inside-avoid group relative">
-                  <div className="absolute top-2 right-2 z-10 hidden group-hover:flex items-center gap-1">
-                    {isEditing ? (
-                      <form
-                        onSubmit={async function (e) {
-                          e.preventDefault();
-                          if (editingTitle.trim()) {
-                            await renameWidgetMutation.mutateAsync({ widgetId: widget.id, title: editingTitle.trim() });
-                          }
-                          setEditingWidgetId(null);
-                        }}
-                        className="flex items-center gap-1"
-                      >
-                        <input
-                          value={editingTitle}
-                          onChange={function (e) { setEditingTitle(e.target.value); }}
-                          className="w-28 rounded-lg border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs text-white outline-none"
-                          autoFocus
-                        />
-                        <button type="submit" className="rounded-lg bg-blue-600 px-2 py-1 text-[10px] font-bold text-white">Save</button>
-                        <button type="button" onClick={function () { setEditingWidgetId(null); }} className="rounded-lg bg-zinc-800 px-2 py-1 text-[10px] text-zinc-400">Cancel</button>
-                      </form>
-                    ) : (
-                      <>
-                        <button
-                          onClick={function () { setEditingWidgetId(widget.id); setEditingTitle(widget.title); }}
-                          className="rounded-lg bg-zinc-800/80 p-1.5 text-zinc-500 hover:bg-zinc-700 hover:text-white transition-colors"
-                        >
-                          <Pencil size={12} />
-                        </button>
-                        <button
-                          onClick={async function () {
-                            if (confirm('Delete "' + widget.title + '" widget?')) {
-                              await deleteWidgetMutation.mutateAsync(widget.id);
-                            }
-                          }}
-                          className="rounded-lg bg-zinc-800/80 p-1.5 text-zinc-500 hover:bg-red-600 hover:text-white transition-colors"
-                        >
-                          <Trash2 size={12} />
-                        </button>
-                      </>
-                    )}
-                  </div>
-                  {widget.type === "chart" ? (
-                    <ChartWidget title={widget.title} data={chartData} onClick={handleClick} />
-                  ) : null}
-                  {widget.type === "list" ? (
-                    <ListWidget title={widget.title} items={listData} onClick={handleClick} />
-                  ) : null}
-                  {widget.type === "metric" ? (
-                    <MetricCard title={widget.title} value={metricData?.value} unit={metricData?.unit} sentiment={metricData?.sentiment} onClick={handleClick} />
-                  ) : null}
-                </div>
-              );
-            })}
-            {widgets.length === 0 ? (
-              <div className="flex flex-col items-center justify-center text-zinc-700 py-16 border-2 border-dashed border-zinc-900 rounded-[36px]">
-                <Package size={44} strokeWidth={1} className="mb-3" />
-                <p className="text-sm font-medium">
-                  Log something to seed your canvas
-                </p>
-              </div>
-            ) : null}
-          </div>
+          <BlockCanvas blocks={blocks} logs={allLogs} onViewSource={setSourceBlock} />
         </main>
 
         <AnimatePresence>
@@ -943,6 +712,50 @@ export default function CodexApp() {
               setPreviewLog(null);
             }}
           />
+        ) : null}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {sourceBlock ? (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-6 backdrop-blur-sm"
+            onClick={function () { setSourceBlock(null); }}
+          >
+            <div
+              className="max-h-[80vh] w-full max-w-lg overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950 shadow-2xl"
+              onClick={function (e) { e.stopPropagation(); }}
+            >
+              <div className="flex items-center justify-between border-b border-zinc-800 px-5 py-4">
+                <div>
+                  <h2 className="text-[15px] font-semibold text-zinc-100">{sourceBlock.title}</h2>
+                  <p className="mt-0.5 text-xs text-zinc-500">Logs contributing to this block</p>
+                </div>
+                <button onClick={function () { setSourceBlock(null); }} className="text-zinc-500 hover:text-zinc-200">
+                  <X size={18} />
+                </button>
+              </div>
+              <div className="max-h-[60vh] space-y-2 overflow-y-auto p-4">
+                {allLogs
+                  .filter((l) => !sourceBlock.queryConfig?.category || l.category === sourceBlock.queryConfig.category)
+                  .map((l) => (
+                    <button
+                      key={l.id}
+                      onClick={function () { setPreviewLog(l); setSourceBlock(null); }}
+                      className="block w-full rounded-lg border border-zinc-800/70 bg-zinc-900/40 p-3 text-left transition-colors hover:border-zinc-700"
+                    >
+                      <p className="text-sm text-zinc-300 line-clamp-2">{l.raw_content}</p>
+                      <p className="mt-1 text-[10px] text-zinc-600">
+                        {new Date(l.timestamp).toLocaleString()} · confidence{" "}
+                        {l.ai_confidence != null ? Math.round(l.ai_confidence * 100) + "%" : "—"}
+                      </p>
+                    </button>
+                  ))}
+              </div>
+            </div>
+          </motion.div>
         ) : null}
       </AnimatePresence>
 
