@@ -4,47 +4,50 @@ import { motion } from "framer-motion";
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from "recharts";
-import { Maximize2 } from "lucide-react";
 
-export function ChartWidget({ title, data, type, onClick }: {
+export function ChartWidget({ title, data, type, color, accentDot, onClick }: {
   title: string;
   data?: Array<{ date: string; value: number }>;
   type?: string;
+  color?: string;
+  accentDot?: string;
   onClick?: () => void;
 }) {
   const chartType = type || "line";
+  const stroke = color || "#a1a1aa";
+  const tooltipStyle = { backgroundColor: "#18181b", border: "1px solid #3f3f46", borderRadius: "8px", fontSize: "12px" };
   return (
     <motion.div
       layout
       onClick={onClick}
-      className="group flex flex-col rounded-3xl border border-zinc-800 bg-zinc-900 p-6 shadow-sm transition-all hover:border-zinc-700 hover:shadow-xl cursor-pointer"
+      className={
+        "group flex h-full flex-col rounded-xl border border-zinc-800/80 bg-zinc-900/40 p-5 transition-all hover:border-zinc-700 " +
+        (onClick ? "cursor-pointer" : "")
+      }
     >
-      <div className="mb-4 flex items-center justify-between">
-        <h3 className="text-sm font-bold text-white uppercase tracking-wider">
+      <div className="mb-3 flex items-center gap-2">
+        {accentDot ? <div className={"h-1.5 w-1.5 shrink-0 rounded-full " + accentDot} /> : null}
+        <h3 className="truncate text-[11px] font-semibold uppercase tracking-[0.08em] text-zinc-500">
           {title}
         </h3>
-        <Maximize2
-          size={14}
-          className="opacity-0 transition-opacity group-hover:opacity-100 text-zinc-500"
-        />
       </div>
-      <div className="h-[200px]">
-        <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+      <div className="min-h-0 flex-1">
+        <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={80}>
           {chartType === "line" ? (
             <LineChart data={data}>
               <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} />
               <XAxis dataKey="date" hide />
               <YAxis hide />
-              <Tooltip contentStyle={{ backgroundColor: "#18181b", border: "1px solid #3f3f46", borderRadius: "12px" }} itemStyle={{ color: "#fff" }} />
-              <Line type="monotone" dataKey="value" stroke="#fff" strokeWidth={3} dot={false} />
+              <Tooltip contentStyle={tooltipStyle} itemStyle={{ color: "#e4e4e7" }} cursor={{ stroke: "#3f3f46" }} />
+              <Line type="monotone" dataKey="value" stroke={stroke} strokeWidth={2} dot={false} />
             </LineChart>
           ) : (
             <BarChart data={data}>
               <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} />
               <XAxis dataKey="date" hide />
               <YAxis hide />
-              <Tooltip contentStyle={{ backgroundColor: "#18181b", border: "1px solid #3f3f46", borderRadius: "12px" }} itemStyle={{ color: "#fff" }} />
-              <Bar dataKey="value" fill="#fff" radius={[4, 4, 0, 0]} />
+              <Tooltip contentStyle={tooltipStyle} itemStyle={{ color: "#e4e4e7" }} cursor={{ fill: "#ffffff08" }} />
+              <Bar dataKey="value" fill={stroke} radius={[4, 4, 0, 0]} />
             </BarChart>
           )}
         </ResponsiveContainer>

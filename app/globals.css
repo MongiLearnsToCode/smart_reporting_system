@@ -77,3 +77,24 @@
     scrollbar-color: theme('colors.zinc.700') transparent;
   }
 }
+
+/* React Grid Layout — align the drag ghost + resize handle with the
+   control-room aesthetic (borders over shadows, quiet zinc, rounded-xl). */
+.react-grid-item.react-grid-placeholder {
+  background: rgba(39, 39, 42, 0.55); /* zinc-800 wash */
+  border: 1px dashed rgba(113, 113, 122, 0.5); /* zinc-500 */
+  border-radius: 0.75rem; /* rounded-xl */
+  opacity: 1;
+  transition-duration: 120ms;
+}
+.react-grid-item > .react-resizable-handle {
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+.react-grid-item:hover > .react-resizable-handle {
+  opacity: 1;
+}
+.react-grid-item > .react-resizable-handle::after {
+  border-right-color: rgba(113, 113, 122, 0.7); /* zinc-500 */
+  border-bottom-color: rgba(113, 113, 122, 0.7);
+}

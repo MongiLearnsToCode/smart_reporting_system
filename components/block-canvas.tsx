@@ -13,6 +13,7 @@ import { MetricCard } from '@/components/metric-card';
 import { ChartWidget } from '@/components/chart-widget';
 import { ListWidget } from '@/components/list-widget';
 import { logAmount, logSentiment, type Log } from '@/lib/dashboard-utils';
+import { getCat, getCatDetail } from '@/lib/categories';
 import type { ConvexBlockDoc } from '@/utils/convex/adapters';
 import { useBlockMutations } from '@/utils/convex/hooks';
 
@@ -32,19 +33,35 @@ function logsForBlock(block: ConvexBlockDoc, logs: Log[]): Log[] {
   });
 }
 
+// Quiet uppercase section label, matching the control-room design language.
+function BlockLabel({ title, dot }: { title: string; dot?: string }) {
+  return (
+    <div className="mb-3 flex items-center gap-2">
+      {dot ? <div className={'h-1.5 w-1.5 shrink-0 rounded-full ' + dot} /> : null}
+      <h3 className="truncate text-[11px] font-semibold uppercase tracking-[0.08em] text-zinc-500">{title}</h3>
+    </div>
+  );
+}
+
+const PANEL = 'flex h-full flex-col overflow-hidden rounded-xl border border-zinc-800/80 bg-zinc-900/40 p-5';
+
 function BlockBody({ block, logs }: { block: ConvexBlockDoc; logs: Log[] }) {
   const rows = logsForBlock(block, logs);
+  const category = block.queryConfig?.category ?? '';
+  const cat = getCat(category);
+  const chartColor = getCatDetail(category).chart;
   switch (block.type) {
     case 'chart': {
       const data = rows
         .map((l) => ({ date: new Date(l.timestamp).toLocaleDateString(), value: logAmount(l)?.amount || 0 }))
         .reverse();
-      return <ChartWidget title={block.title} data={data} />;
+      return <ChartWidget title={block.title} data={data} color={chartColor} accentDot={cat.dot} />;
     }
     case 'list':
       return (
         <ListWidget
           title={block.title}
+          accentDot={cat.dot}
           items={rows.map((l) => ({ text: l.raw_content, completed: false, date: new Date(l.timestamp).toLocaleDateString() }))}
         />
       );
@@ -54,6 +71,7 @@ function BlockBody({ block, logs }: { block: ConvexBlockDoc; logs: Log[] }) {
       return (
         <MetricCard
           title={block.title}
+          accentDot={cat.dot}
           value={amount ? amount.amount : rows.length}
           unit={amount?.currency || 'entries'}
           sentiment={last ? logSentiment(last) ?? undefined : undefined}
@@ -62,14 +80,14 @@ function BlockBody({ block, logs }: { block: ConvexBlockDoc; logs: Log[] }) {
     }
     case 'timeline':
       return (
-        <div className="flex h-full flex-col rounded-3xl border border-zinc-800 bg-zinc-900 p-5 overflow-hidden">
-          <h3 className="mb-3 text-xs font-black uppercase tracking-widest text-zinc-500">{block.title}</h3>
-          <div className="flex-1 space-y-3 overflow-y-auto pl-3 border-l border-zinc-800">
+        <div className={PANEL}>
+          <BlockLabel title={block.title} dot={cat.dot} />
+          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto border-l border-zinc-800 pl-3">
             {rows.map((l) => (
               <div key={l.id} className="relative">
-                <div className="absolute -left-[17px] top-1.5 h-2 w-2 rounded-full bg-blue-500" />
-                <p className="text-[10px] text-zinc-600">{new Date(l.timestamp).toLocaleString()}</p>
-                <p className="text-sm text-zinc-300 line-clamp-2">{l.raw_content}</p>
+                <div className={'absolute -left-[17px] top-1.5 h-1.5 w-1.5 rounded-full ' + cat.dot} />
+                <p className="font-mono text-[10px] text-zinc-600">{new Date(l.timestamp).toLocaleString()}</p>
+                <p className="line-clamp-2 text-sm text-zinc-300">{l.raw_content}</p>
               </div>
             ))}
             {rows.length === 0 ? <p className="text-xs text-zinc-600">No activity yet.</p> : null}
@@ -79,28 +97,29 @@ function BlockBody({ block, logs }: { block: ConvexBlockDoc; logs: Log[] }) {
     case 'summary':
       // AI narrative arrives in Phase 4; interim shows the underlying activity.
       return (
-        <div className="flex h-full flex-col rounded-3xl border border-zinc-800 bg-zinc-900 p-5 overflow-hidden">
-          <h3 className="mb-3 text-xs font-black uppercase tracking-widest text-zinc-500">{block.title}</h3>
+        <div className={PANEL}>
+          <BlockLabel title={block.title} dot={cat.dot} />
           <p className="text-sm leading-relaxed text-zinc-400">
             {rows.length
-              ? `${rows.length} recent ${block.queryConfig?.category ?? ''} entries. AI narrative generation is coming online.`
+              ? `${rows.length} recent ${category} ${rows.length === 1 ? 'entry' : 'entries'}. AI narrative generation is coming online.`
               : 'Nothing to summarize yet.'}
           </p>
         </div>
       );
     case 'source_log':
       return (
-        <div className="flex h-full flex-col rounded-3xl border border-zinc-800 bg-zinc-900 p-5 overflow-hidden">
-          <h3 className="mb-3 text-xs font-black uppercase tracking-widest text-zinc-500">{block.title}</h3>
-          <div className="flex-1 space-y-2 overflow-y-auto">
+        <div className={PANEL}>
+          <BlockLabel title={block.title} dot={cat.dot} />
+          <div className="min-h-0 flex-1 space-y-2 overflow-y-auto">
             {rows.map((l) => (
-              <div key={l.id} className="rounded-lg border border-zinc-800/70 bg-zinc-950/50 p-2.5">
-                <p className="text-sm text-zinc-300 line-clamp-2">{l.raw_content}</p>
-                <p className="mt-1 text-[10px] text-zinc-600">
+              <div key={l.id} className="rounded-lg border border-zinc-800/70 bg-zinc-950/40 p-2.5">
+                <p className="line-clamp-2 text-sm text-zinc-300">{l.raw_content}</p>
+                <p className="mt-1 font-mono text-[10px] text-zinc-600">
                   confidence {l.ai_confidence != null ? Math.round(l.ai_confidence * 100) + '%' : '—'}
                 </p>
               </div>
             ))}
+            {rows.length === 0 ? <p className="text-xs text-zinc-600">No source logs yet.</p> : null}
           </div>
         </div>
       );
@@ -164,9 +183,9 @@ export function BlockCanvas({
 
   if (blocks.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center rounded-[36px] border-2 border-dashed border-zinc-900 py-16 text-zinc-700">
-        <ListPlus size={44} strokeWidth={1} className="mb-3" />
-        <p className="text-sm font-medium">Log something to seed your canvas</p>
+      <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-zinc-800/80 py-16 text-zinc-700">
+        <ListPlus size={40} strokeWidth={1.25} className="mb-3" />
+        <p className="text-sm font-medium text-zinc-600">Log something to seed your canvas</p>
       </div>
     );
   }
@@ -174,8 +193,8 @@ export function BlockCanvas({
   return (
     <div>
       {hidden.length > 0 ? (
-        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-zinc-900 bg-zinc-950/60 px-3 py-2">
-          <span className="text-[10px] font-black uppercase tracking-widest text-zinc-600">Hidden</span>
+        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-zinc-800/80 bg-zinc-950/60 px-3 py-2">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-zinc-600">Hidden</span>
           {hidden.map((b) => (
             <button
               key={b._id}
