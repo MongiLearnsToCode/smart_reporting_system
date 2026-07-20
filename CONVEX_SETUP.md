@@ -25,6 +25,27 @@ Supabase dashboard, so they can't be scripted.
 3. **Verify the auth bridge**: sign in, open the app, and confirm in the Convex
    dashboard logs that queries carry an identity (no "Unauthenticated" errors).
 
+## Deploying to Vercel (production)
+
+`convex/_generated/` is gitignored, so the Vercel build must generate it. `vercel.json`
+sets the build command to `npx convex deploy --cmd 'npm run build'`, which deploys the
+Convex functions to a **production** deployment, generates `_generated`, injects
+`NEXT_PUBLIC_CONVEX_URL` for the build, then runs `next build`.
+
+**One-time Vercel setup (required — the build fails without it):**
+
+1. Convex dashboard → Project → Settings → **URL & Deploy Key** → **Generate Production
+   Deploy Key**. Copy it.
+2. Vercel → Project → Settings → **Environment Variables** → add
+   `CONVEX_DEPLOY_KEY = <the key>` (Production scope).
+3. If you manually set `NEXT_PUBLIC_CONVEX_URL` in Vercel earlier, **remove it** —
+   `convex deploy` injects the correct production URL automatically.
+4. Redeploy. The first prod deploy creates the production Convex deployment; enable the
+   same Supabase asymmetric-JWT bridge for it (auth.config.ts is already in code).
+
+Local `npm run build` is unaffected (it still runs plain `next build`); only Vercel uses
+the wrapped command.
+
 ## Data migration (once, after step 1)
 
 Copy existing Supabase logs/widgets into Convex:
