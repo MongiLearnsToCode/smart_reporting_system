@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   DollarSign, Calendar, TrendingUp, Zap, User, Tag,
@@ -18,14 +18,33 @@ export function LogPreviewModal({ log, onClose, allLogs }: {
   allLogs: Log[];
 }) {
   const [showAttachment, setShowAttachment] = useState(false);
+  // Optimistic exclude state so the button flips the instant it's clicked,
+  // before the Convex round-trip lands (spec §8 trust action must feel direct).
+  const [pendingExcluded, setPendingExcluded] = useState<boolean | null>(null);
   const { applyCorrection, setExcluded } = useLogMutations();
+
+  // Read exclusion from the reactive feed, not the (frozen) prop snapshot, so
+  // this modal reflects the change live rather than only via a toast.
+  const serverExcluded = log
+    ? (allLogs.find((l) => l.id === log.id)?.excluded_from_reports ?? log.excluded_from_reports)
+    : false;
+  useEffect(() => {
+    // Drop the optimistic flag once the server state matches it.
+    if (pendingExcluded !== null && serverExcluded === pendingExcluded) setPendingExcluded(null);
+  }, [serverExcluded, pendingExcluded]);
+  // Reset optimistic state when a different log is previewed.
+  useEffect(() => { setPendingExcluded(null); }, [log?.id]);
+
   if (!log) return null;
-  const cat = getCat(log.category);
-  const confidencePct = log.ai_confidence != null ? Math.round(log.ai_confidence * 100) : null;
-  const allEntities = entitiesOf(log);
+  // Live version of the log (reactive) — mutations reflect here immediately.
+  const liveLog = allLogs.find((l) => l.id === log.id) ?? log;
+  const excluded = pendingExcluded ?? serverExcluded;
+  const cat = getCat(liveLog.category);
+  const confidencePct = liveLog.ai_confidence != null ? Math.round(liveLog.ai_confidence * 100) : null;
+  const allEntities = entitiesOf(liveLog);
 
   async function correctCategory(newCategory: string) {
-    if (!log || newCategory === log.category) return;
+    if (!log || newCategory === liveLog.category) return;
     try {
       await applyCorrection({ id: log.id as never, field: "category", to: newCategory, category: newCategory });
       toast.success("Category corrected — derived blocks will update");
@@ -36,10 +55,13 @@ export function LogPreviewModal({ log, onClose, allLogs }: {
 
   async function toggleExcluded() {
     if (!log) return;
+    const next = !excluded;
+    setPendingExcluded(next); // instant flip; reconciled by the effect above
     try {
-      await setExcluded({ id: log.id as never, excluded: !log.excluded_from_reports });
-      toast.success(log.excluded_from_reports ? "Included in reports" : "Excluded from reports");
+      await setExcluded({ id: log.id as never, excluded: next });
+      toast.success(next ? "Excluded from reports" : "Included in reports");
     } catch {
+      setPendingExcluded(!next); // revert on failure
       toast.error("Could not update");
     }
   }
@@ -112,7 +134,7 @@ export function LogPreviewModal({ log, onClose, allLogs }: {
               </div>
               <div>
                 <span className={"text-[13px] font-semibold " + cat.text}>
-                  {log.category}
+                  {liveLog.category}
                 </span>
                 <p className="font-mono text-[10.5px] text-zinc-500 mt-0.5">
                   {new Date(log.timestamp).toLocaleString()}
@@ -222,7 +244,7 @@ export function LogPreviewModal({ log, onClose, allLogs }: {
           </div>
         ) : null}
 
-        {log.corrections && log.corrections.length > 0 ? (
+        {liveLog.corrections && liveLog.corrections.length > 0 ? (
           <div className="px-6 py-4 border-b border-zinc-800/80">
             <div className="mb-2 flex items-center gap-1.5">
               <History size={11} className="text-zinc-500" />
@@ -231,7 +253,7 @@ export function LogPreviewModal({ log, onClose, allLogs }: {
               </p>
             </div>
             <div className="space-y-1.5">
-              {log.corrections.map((c, i) => (
+              {liveLog.corrections.map((c, i) => (
                 <div key={i} className="flex items-center gap-2 text-[11px] text-zinc-400">
                   <span className="font-medium text-zinc-300 capitalize">{c.field}</span>
                   <span className="text-zinc-600">{String(c.from ?? "—")}</span>
@@ -251,7 +273,7 @@ export function LogPreviewModal({ log, onClose, allLogs }: {
           <label className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-zinc-500">
             Category
             <select
-              value={CATEGORIES.includes(log.category as never) ? log.category : "Other"}
+              value={CATEGORIES.includes(liveLog.category as never) ? liveLog.category : "Other"}
               onChange={(e) => correctCategory(e.target.value)}
               className="rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 text-[12px] font-normal normal-case text-zinc-200 outline-none focus:border-zinc-600"
             >
@@ -264,13 +286,13 @@ export function LogPreviewModal({ log, onClose, allLogs }: {
             onClick={toggleExcluded}
             className={
               "flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition-colors " +
-              (log.excluded_from_reports
+              (excluded
                 ? "border-zinc-700 bg-zinc-800 text-zinc-300 hover:text-white"
                 : "border-zinc-800 text-zinc-500 hover:border-zinc-700 hover:text-zinc-300")
             }
             title="Toggle whether this log feeds blocks and reports"
           >
-            {log.excluded_from_reports ? <><Eye size={12} /> Include</> : <><EyeOff size={12} /> Exclude</>}
+            {excluded ? <><Eye size={12} /> Include</> : <><EyeOff size={12} /> Exclude</>}
           </button>
         </div>
       </motion.div>
