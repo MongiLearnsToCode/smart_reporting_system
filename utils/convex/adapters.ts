@@ -32,6 +32,8 @@ export type ConvexBlockDoc = {
   pinned: boolean;
   includeInReports: boolean;
   createdAt: number;
+  summary?: string | null;
+  summaryAt?: number | null;
   deletedAt?: number | null;
 };
 

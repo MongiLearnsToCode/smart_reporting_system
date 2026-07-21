@@ -82,15 +82,26 @@ export function BlockBody({ block, logs }: { block: ConvexBlockDoc; logs: Log[] 
         </div>
       );
     case 'summary':
-      // AI narrative arrives in Phase 4; interim shows the underlying activity.
+      // AI narrative, generated on demand and cached on the block (spec §4).
       return (
         <div className={PANEL}>
           <BlockLabel title={block.title} dot={cat.dot} />
-          <p className="text-sm leading-relaxed text-zinc-400">
-            {rows.length
-              ? `${rows.length} recent ${category} ${rows.length === 1 ? 'entry' : 'entries'}. AI narrative generation is coming online.`
-              : 'Nothing to summarize yet.'}
-          </p>
+          {block.summary ? (
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <p className="whitespace-pre-line text-sm leading-relaxed text-zinc-300">{block.summary}</p>
+              {block.summaryAt ? (
+                <p className="mt-3 font-mono text-[10px] text-zinc-600">
+                  as of {new Date(block.summaryAt).toLocaleString()}
+                </p>
+              ) : null}
+            </div>
+          ) : (
+            <p className="text-sm leading-relaxed text-zinc-500">
+              {rows.length
+                ? `${rows.length} recent ${category || 'log'} ${rows.length === 1 ? 'entry' : 'entries'} ready to summarize. Hover and hit ✨ to generate a narrative.`
+                : 'Nothing to summarize yet.'}
+            </p>
+          )}
         </div>
       );
     case 'source_log':

@@ -248,16 +248,40 @@ export const restore = mutation({
   },
 });
 
+// Single-block read for server-side flows (e.g. the summary-narrative route).
+export const getById = query({
+  args: { id: v.id('canvasBlocks') },
+  handler: async (ctx, { id }) => {
+    const userId = await optionalUserId(ctx);
+    if (!userId) return null;
+    const block = await ctx.db.get(id);
+    if (!block || block.userId !== userId || block.deletedAt) return null;
+    return block;
+  },
+});
+
+// Caches an AI narrative on a summary block (spec §4). Written by the summary
+// route after a Groq call; the canvas re-renders reactively.
+export const setSummary = mutation({
+  args: { id: v.id('canvasBlocks'), summary: v.string() },
+  handler: async (ctx, { id, summary }) => {
+    const userId = await requireUserId(ctx);
+    await ownedBlock(ctx, userId, id);
+    await ctx.db.patch(id, { summary: summary.trim().slice(0, 1200), summaryAt: Date.now() });
+  },
+});
+
 // Hard-purges tombstones past the undo window. Scheduled from crons.ts.
+// Range-scans the by_deleted index: deletedAt in (0, cutoff) is exactly the set
+// of soft-deleted-and-expired blocks (live blocks have deletedAt null/absent,
+// which sorts below 0).
 export const purgeExpired = internalMutation({
   args: {},
   handler: async (ctx) => {
     const cutoff = Date.now() - UNDO_WINDOW_MS;
     const stale = await ctx.db
       .query('canvasBlocks')
-      .filter((q) =>
-        q.and(q.neq(q.field('deletedAt'), null), q.lt(q.field('deletedAt'), cutoff)),
-      )
+      .withIndex('by_deleted', (q) => q.gt('deletedAt', 0).lt('deletedAt', cutoff))
       .collect();
     for (const b of stale) await ctx.db.delete(b._id);
   },

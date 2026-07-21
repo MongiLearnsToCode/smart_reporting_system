@@ -83,9 +83,15 @@ export default defineSchema({
     pinned: v.boolean(),
     includeInReports: v.boolean(),
     createdAt: v.number(),
+    // Cached AI narrative for `summary` blocks (spec §4), regenerated on demand.
+    summary: v.optional(v.union(v.string(), v.null())),
+    summaryAt: v.optional(v.union(v.number(), v.null())),
     // Soft-delete tombstone for the 5s undo window (spec §4). null/absent = live.
     deletedAt: v.optional(v.union(v.number(), v.null())),
-  }).index('by_user', ['userId']),
+  })
+    .index('by_user', ['userId'])
+    // Lets the purge cron range-scan tombstones instead of filtering the table.
+    .index('by_deleted', ['deletedAt']),
 
   // Structured logs — the source data blocks query over (mirrors Supabase `logs`).
   logs: defineTable({

@@ -7,12 +7,13 @@ import 'react-resizable/css/styles.css';
 import { toast } from 'sonner';
 import {
   GripVertical, Pin, PinOff, EyeOff, Eye, Copy, Trash2, Pencil,
-  FileText, FileX, ListPlus,
+  FileText, FileX, ListPlus, Sparkles, Loader2,
 } from 'lucide-react';
 import { type Log } from '@/lib/dashboard-utils';
 import type { ConvexBlockDoc } from '@/utils/convex/adapters';
 import { useBlockMutations } from '@/utils/convex/hooks';
 import { BlockBody } from '@/components/block-render';
+import { csrfFetch } from '@/utils/api/csrf';
 
 const ResponsiveGridLayout = RGL.WidthProvider(RGL.Responsive);
 const COLS = { lg: 12, md: 12, sm: 6, xs: 4, xxs: 2 };
@@ -31,8 +32,30 @@ export function BlockCanvas({
   const m = useBlockMutations();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
+  const [summarizingId, setSummarizingId] = useState<string | null>(null);
   // Guards the layout write so a click that doesn't move a block is not persisted.
   const draggingRef = useRef(false);
+
+  // Generate the AI narrative for a summary block (spec §4). The route calls
+  // Groq and caches the result on the block; the canvas re-renders reactively.
+  async function generateSummary(block: ConvexBlockDoc) {
+    setSummarizingId(block._id);
+    try {
+      const res = await csrfFetch('/api/blocks/summary', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ blockId: block._id }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Could not generate summary');
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not generate summary');
+    } finally {
+      setSummarizingId(null);
+    }
+  }
 
   const visible = useMemo(() => blocks.filter((b) => b.visible), [blocks]);
   const hidden = useMemo(() => blocks.filter((b) => !b.visible), [blocks]);
@@ -146,6 +169,15 @@ export function BlockCanvas({
                 </form>
               ) : (
                 <>
+                  {block.type === 'summary' ? (
+                    <IconBtn
+                      title={block.summary ? 'Regenerate narrative' : 'Generate narrative'}
+                      onClick={() => generateSummary(block)}
+                      active={summarizingId === block._id}
+                    >
+                      {summarizingId === block._id ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                    </IconBtn>
+                  ) : null}
                   <IconBtn title="View source logs" onClick={() => onViewSource(block)}><FileText size={12} /></IconBtn>
                   <IconBtn
                     title={block.includeInReports ? 'In reports — click to exclude' : 'Excluded — click to include'}
