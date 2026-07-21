@@ -37,7 +37,9 @@ export function useBlockMutations() {
   const softDelete = useConvexMutation(api.blocks.softDelete);
   const restore = useConvexMutation(api.blocks.restore);
   const create = useConvexMutation(api.blocks.create);
-  return { updateLayout, rename, setVisible, setPinned, duplicate, toggleReport, softDelete, restore, create };
+  const convertType = useConvexMutation(api.blocks.convertType);
+  const updateQueryConfig = useConvexMutation(api.blocks.updateQueryConfig);
+  return { updateLayout, rename, setVisible, setPinned, duplicate, toggleReport, softDelete, restore, create, convertType, updateQueryConfig };
 }
 
 export function useLogMutations() {

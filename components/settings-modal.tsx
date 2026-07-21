@@ -10,6 +10,14 @@ import {
 import { Settings } from "lucide-react";
 import { CURRENCIES, TIMEZONES, LANGUAGES, type UserSettings } from "@/lib/dashboard-utils";
 
+// Spec §10: monetisation is by block capability. Free already gets all six
+// block types; paid tiers unlock manipulation power.
+const PLANS = [
+  { tier: "free", label: "Free", perk: "All 6 block types" },
+  { tier: "starter", label: "Starter", perk: "+ block-to-block conversion" },
+  { tier: "pro", label: "Pro", perk: "+ AI canvas commands" },
+] as const;
+
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
     <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-zinc-500">
@@ -72,6 +80,33 @@ export function SettingsModal({ settings, onSave, onClose }: {
 
         <ScrollArea className="max-h-[70vh]">
           <div className="space-y-3 p-5">
+            <section className="space-y-3 rounded-lg border border-zinc-800/80 bg-zinc-900/40 p-4">
+              <SectionLabel>Plan</SectionLabel>
+              <div className="grid grid-cols-3 gap-2">
+                {PLANS.map((p) => {
+                  const active = (form.tier ?? "free") === p.tier;
+                  return (
+                    <button
+                      key={p.tier}
+                      type="button"
+                      onClick={() => set("tier", p.tier)}
+                      className={
+                        "flex flex-col gap-1 rounded-md border p-3 text-left transition-colors " +
+                        (active
+                          ? "border-violet-500/40 bg-violet-500/10"
+                          : "border-zinc-800 bg-zinc-900 hover:border-zinc-700")
+                      }
+                    >
+                      <span className={"text-[13px] font-semibold " + (active ? "text-violet-300" : "text-zinc-300")}>
+                        {p.label}
+                      </span>
+                      <span className="text-[11px] leading-snug text-zinc-500">{p.perk}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+
             <section className="space-y-4 rounded-lg border border-zinc-800/80 bg-zinc-900/40 p-4">
               <SectionLabel>Currency & Finance</SectionLabel>
               <div className="flex items-center justify-between gap-4">

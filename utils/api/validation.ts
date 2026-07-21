@@ -1,6 +1,8 @@
 export const CURRENCIES = ['USD', 'EUR', 'GBP', 'ZAR', 'JPY', 'CAD', 'AUD', 'CHF', 'CNY', 'INR', 'BRL', 'MXN', 'NGN', 'KES', 'GHS'] as const;
 export const TIMEZONES = ['UTC', 'Africa/Johannesburg', 'Africa/Lagos', 'Africa/Nairobi', 'America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles', 'America/Sao_Paulo', 'Europe/London', 'Europe/Paris', 'Europe/Berlin', 'Asia/Dubai', 'Asia/Kolkata', 'Asia/Singapore', 'Asia/Tokyo', 'Australia/Sydney'] as const;
 export const LANGUAGES = ['English', 'French', 'Spanish', 'Portuguese', 'German', 'Swahili', 'Zulu', 'Afrikaans', 'Arabic', 'Chinese', 'Hindi', 'Japanese'] as const;
+// Monetisation is by block *capability*, not count (spec §10).
+export const TIERS = ['free', 'starter', 'pro'] as const;
 
 export const DEFAULT_SETTINGS = {
   currency: 'USD',
@@ -11,6 +13,7 @@ export const DEFAULT_SETTINGS = {
   default_widget_sort: 'title',
   canvas_density: 'comfortable',
   data_retention_days: 90,
+  tier: 'free',
 };
 
 function isOneOf<T extends readonly string[]>(value: unknown, values: T): value is T[number] {
@@ -35,6 +38,7 @@ export function parseSettings(input: unknown) {
     default_widget_sort: isOneOf(body.default_widget_sort, ['title', 'created', 'recent'] as const) ? body.default_widget_sort : DEFAULT_SETTINGS.default_widget_sort,
     canvas_density: isOneOf(body.canvas_density, ['comfortable', 'compact'] as const) ? body.canvas_density : DEFAULT_SETTINGS.canvas_density,
     data_retention_days: intInRange(body.data_retention_days, DEFAULT_SETTINGS.data_retention_days, 1, 365),
+    tier: isOneOf(body.tier, TIERS) ? body.tier : DEFAULT_SETTINGS.tier,
   };
 }
 

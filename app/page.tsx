@@ -47,6 +47,7 @@ import { Composer } from "@/components/composer";
 import { BlockCanvas } from "@/components/block-canvas";
 import { getCat } from "@/lib/categories";
 import { uniqueClients, logClients, type Log, type UserSettings } from "@/lib/dashboard-utils";
+import { normalizeTier } from "@/lib/tiers";
 import { useBlocks, useLogs, useLogMutations } from "@/utils/convex/hooks";
 import type { ConvexBlockDoc } from "@/utils/convex/adapters";
 import { ReportsModal } from "@/components/reports-modal";
@@ -170,6 +171,7 @@ export default function CodexApp() {
   });
 
   const userSettings = (settingsQuery.data && settingsQuery.data.settings) || {};
+  const tier = normalizeTier((userSettings as Partial<UserSettings>).tier);
 
   function handleFilesAdded(newFiles: File[]) {
     setFiles(function (prev) { return [...prev, ...newFiles]; });
@@ -427,7 +429,7 @@ export default function CodexApp() {
               ).toLocaleDateString()}
             </motion.div>
           ) : null}
-          <BlockCanvas blocks={blocks} logs={allLogs} onViewSource={setSourceBlock} />
+          <BlockCanvas blocks={blocks} logs={allLogs} onViewSource={setSourceBlock} tier={tier} />
         </main>
 
         <AnimatePresence>
@@ -779,6 +781,7 @@ export default function CodexApp() {
             default_widget_sort: "title",
             canvas_density: "comfortable",
             data_retention_days: 90,
+            tier: "free",
             ...userSettings,
           }}
           onSave={async (s: Partial<UserSettings>) => { await settingsMutation.mutateAsync(s); }}

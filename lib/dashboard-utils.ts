@@ -180,4 +180,5 @@ export type UserSettings = {
   default_widget_sort: "title" | "created" | "recent";
   canvas_density: string;
   data_retention_days: number;
+  tier: "free" | "starter" | "pro";
 };

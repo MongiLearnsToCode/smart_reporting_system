@@ -7,13 +7,26 @@ import 'react-resizable/css/styles.css';
 import { toast } from 'sonner';
 import {
   GripVertical, Pin, PinOff, EyeOff, Eye, Copy, Trash2, Pencil,
-  FileText, FileX, ListPlus, Sparkles, Loader2,
+  FileText, FileX, ListPlus, Sparkles, Loader2, Repeat, Lock,
+  Hash, BarChart3, List, Clock, ScrollText, Check,
 } from 'lucide-react';
 import { type Log } from '@/lib/dashboard-utils';
 import type { ConvexBlockDoc } from '@/utils/convex/adapters';
 import { useBlockMutations } from '@/utils/convex/hooks';
 import { BlockBody } from '@/components/block-render';
 import { csrfFetch } from '@/utils/api/csrf';
+import { type Tier, tierAllows, upsellFor } from '@/lib/tiers';
+
+// The six block types, for the conversion picker (spec §5 P1).
+type BlockType = 'metric' | 'chart' | 'list' | 'timeline' | 'summary' | 'source_log';
+const TYPE_META: { type: BlockType; label: string; Icon: typeof Hash }[] = [
+  { type: 'metric', label: 'Metric', Icon: Hash },
+  { type: 'chart', label: 'Chart', Icon: BarChart3 },
+  { type: 'list', label: 'List', Icon: List },
+  { type: 'timeline', label: 'Timeline', Icon: Clock },
+  { type: 'summary', label: 'Summary', Icon: FileText },
+  { type: 'source_log', label: 'Source', Icon: ScrollText },
+];
 
 const ResponsiveGridLayout = RGL.WidthProvider(RGL.Responsive);
 const COLS = { lg: 12, md: 12, sm: 6, xs: 4, xxs: 2 };
@@ -24,15 +37,19 @@ export function BlockCanvas({
   blocks,
   logs,
   onViewSource,
+  tier = 'free',
 }: {
   blocks: ConvexBlockDoc[];
   logs: Log[];
   onViewSource: (block: ConvexBlockDoc) => void;
+  tier?: Tier;
 }) {
   const m = useBlockMutations();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
   const [summarizingId, setSummarizingId] = useState<string | null>(null);
+  const [convertId, setConvertId] = useState<string | null>(null);
+  const canConvert = tierAllows(tier, 'convert');
   // Guards the layout write so a click that doesn't move a block is not persisted.
   const draggingRef = useRef(false);
 
@@ -167,6 +184,28 @@ export function BlockCanvas({
                   />
                   <button type="submit" className="rounded-lg bg-blue-600 px-2 py-1 text-[10px] font-bold text-white">Save</button>
                 </form>
+              ) : convertId === block._id ? (
+                <div className="flex items-center gap-0.5 rounded-lg border border-zinc-700 bg-zinc-900/95 p-0.5">
+                  {TYPE_META.map(({ type, label, Icon }) => (
+                    <button
+                      key={type}
+                      type="button"
+                      title={type === block.type ? `${label} (current)` : `Convert to ${label}`}
+                      onClick={() => {
+                        if (type !== block.type) m.convertType({ id: block._id as any, type });
+                        setConvertId(null);
+                      }}
+                      className={
+                        'flex items-center rounded-md p-1.5 transition-colors ' +
+                        (type === block.type
+                          ? 'bg-violet-500/20 text-violet-300'
+                          : 'text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200')
+                      }
+                    >
+                      {type === block.type ? <Check size={12} /> : <Icon size={12} />}
+                    </button>
+                  ))}
+                </div>
               ) : (
                 <>
                   {block.type === 'summary' ? (
@@ -187,6 +226,15 @@ export function BlockCanvas({
                     {block.includeInReports ? <FileText size={12} /> : <FileX size={12} />}
                   </IconBtn>
                   <IconBtn title="Rename" onClick={() => { setEditingId(block._id); setEditingTitle(block.title); }}><Pencil size={12} /></IconBtn>
+                  <IconBtn
+                    title={canConvert ? 'Convert type' : upsellFor('convert')}
+                    onClick={() => {
+                      if (canConvert) setConvertId(block._id);
+                      else toast(upsellFor('convert'), { description: 'Upgrade to unlock block-to-block conversion.' });
+                    }}
+                  >
+                    {canConvert ? <Repeat size={12} /> : <Lock size={12} />}
+                  </IconBtn>
                   <IconBtn title={block.pinned ? 'Unpin' : 'Pin'} onClick={() => m.setPinned({ id: block._id as any, pinned: !block.pinned })}>
                     {block.pinned ? <PinOff size={12} /> : <Pin size={12} />}
                   </IconBtn>

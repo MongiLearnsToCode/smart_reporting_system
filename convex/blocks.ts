@@ -198,6 +198,18 @@ export const toggleReport = mutation({
   },
 });
 
+// Block-to-block conversion (spec §5 P1, Starter tier §10). All types render
+// over the same log data, so a conversion is just a type swap — layout, config
+// and report membership carry over. Tier is enforced at the call site (route/UI).
+export const convertType = mutation({
+  args: { id: v.id('canvasBlocks'), type: blockType },
+  handler: async (ctx, { id, type }) => {
+    const userId = await requireUserId(ctx);
+    await ownedBlock(ctx, userId, id);
+    await ctx.db.patch(id, { type });
+  },
+});
+
 export const updateQueryConfig = mutation({
   args: { id: v.id('canvasBlocks'), queryConfig: queryConfigValidator },
   handler: async (ctx, { id, queryConfig }) => {

@@ -23,7 +23,13 @@ describe('validation helpers', () => {
       default_widget_sort: 'recent',
       canvas_density: 'comfortable',
       data_retention_days: 90,
+      tier: 'free',
     });
+  });
+
+  it('whitelists the plan tier and falls back to free', () => {
+    expect(parseSettings({ tier: 'pro' }).tier).toBe('pro');
+    expect(parseSettings({ tier: 'enterprise' }).tier).toBe('free');
   });
 
   it('rejects empty process payloads', () => {
