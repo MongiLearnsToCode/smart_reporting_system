@@ -765,7 +765,7 @@ export default function CodexApp() {
       </AnimatePresence>
 
       {showReports ? (
-        <ReportsModal clients={clients} onClose={function () { setShowReports(false); }} />
+        <ReportsModal blocks={blocks} logs={allLogs} onClose={function () { setShowReports(false); }} />
       ) : null}
 
       {showSettings ? (

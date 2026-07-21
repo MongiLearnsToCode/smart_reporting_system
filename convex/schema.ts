@@ -122,12 +122,14 @@ export default defineSchema({
     .index('by_source', ['sourceId']),
 
   // Generated reports reference blocks by id, never copy content (spec §9).
+  // The rendered PDF lives in Convex file storage; the doc points at it by
+  // storageId so regeneration reflects each block's *current* state.
   reports: defineTable({
     userId: v.string(),
     includedBlockIds: v.array(v.id('canvasBlocks')),
     range: v.number(),
-    template: v.optional(v.string()),
-    fileUrl: v.optional(v.union(v.string(), v.null())),
+    title: v.optional(v.string()),
+    storageId: v.id('_storage'),
     createdAt: v.number(),
   }).index('by_user', ['userId']),
 });

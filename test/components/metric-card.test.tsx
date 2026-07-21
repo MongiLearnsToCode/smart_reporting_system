@@ -17,12 +17,13 @@ describe('MetricCard', () => {
 
   it('shows positive sentiment', () => {
     render(<MetricCard title="Sales" value={100} sentiment="positive" />);
-    expect(screen.getByText('POSITIVE')).toBeInTheDocument();
+    // Rendered lowercase; the control-room pill uppercases via CSS `capitalize`.
+    expect(screen.getByText('positive')).toBeInTheDocument();
   });
 
   it('shows negative sentiment', () => {
     render(<MetricCard title="Sales" value={100} sentiment="negative" />);
-    expect(screen.getByText('NEGATIVE')).toBeInTheDocument();
+    expect(screen.getByText('negative')).toBeInTheDocument();
   });
 
   it('calls onClick when clicked', () => {
