@@ -8,14 +8,19 @@ import { toast } from 'sonner';
 import {
   GripVertical, Pin, PinOff, EyeOff, Eye, Copy, Trash2, Pencil,
   FileText, FileX, ListPlus, Sparkles, Loader2, Repeat, Lock,
-  Hash, BarChart3, List, Clock, ScrollText, Check,
+  Hash, BarChart3, List, Clock, ScrollText, Check, Plus, X,
 } from 'lucide-react';
-import { type Log } from '@/lib/dashboard-utils';
+import { logAmount, type Log } from '@/lib/dashboard-utils';
+import { getCat } from '@/lib/categories';
 import type { ConvexBlockDoc } from '@/utils/convex/adapters';
 import { useBlockMutations } from '@/utils/convex/hooks';
 import { BlockBody } from '@/components/block-render';
 import { csrfFetch } from '@/utils/api/csrf';
 import { type Tier, tierAllows, upsellFor } from '@/lib/tiers';
+
+// A category is worth suggesting a block for once it has this much activity.
+const SUGGEST_THRESHOLD = 5;
+const DISMISS_KEY = 'codex.dismissedSuggestions';
 
 // The six block types, for the conversion picker (spec §5 P1).
 type BlockType = 'metric' | 'chart' | 'list' | 'timeline' | 'summary' | 'source_log';
@@ -50,6 +55,46 @@ export function BlockCanvas({
   const [summarizingId, setSummarizingId] = useState<string | null>(null);
   const [convertId, setConvertId] = useState<string | null>(null);
   const canConvert = tierAllows(tier, 'convert');
+
+  // System-suggested blocks (spec §5 P1): categories with real, recurring
+  // activity that no block covers yet. Dismissals persist locally so a declined
+  // suggestion doesn't nag across reloads.
+  const [dismissed, setDismissed] = useState<Set<string>>(() => {
+    if (typeof window === 'undefined') return new Set();
+    try { return new Set(JSON.parse(localStorage.getItem(DISMISS_KEY) || '[]')); } catch { return new Set(); }
+  });
+  function dismissSuggestion(category: string) {
+    setDismissed((prev) => {
+      const next = new Set(prev);
+      next.add(category);
+      try { localStorage.setItem(DISMISS_KEY, JSON.stringify([...next])); } catch { /* storage optional */ }
+      return next;
+    });
+  }
+  const suggestions = useMemo(() => {
+    const covered = new Set(
+      blocks.map((b) => b.queryConfig?.category).filter(Boolean) as string[],
+    );
+    const counts = new Map<string, { total: number; withAmount: number }>();
+    for (const l of logs) {
+      if (l.excluded_from_reports || !l.category) continue;
+      const e = counts.get(l.category) ?? { total: 0, withAmount: 0 };
+      e.total++;
+      if (logAmount(l)) e.withAmount++;
+      counts.set(l.category, e);
+    }
+    const out: { category: string; count: number; type: BlockType }[] = [];
+    for (const [category, { total, withAmount }] of counts) {
+      if (total < SUGGEST_THRESHOLD || covered.has(category) || dismissed.has(category)) continue;
+      // Numeric-heavy categories get a chart; everything else a list.
+      out.push({ category, count: total, type: withAmount * 2 >= total ? 'chart' : 'list' });
+    }
+    return out.sort((a, b) => b.count - a.count).slice(0, 4);
+  }, [blocks, logs, dismissed]);
+
+  function createSuggested(s: { category: string; type: BlockType }) {
+    m.create({ type: s.type, title: s.category, queryConfig: { category: s.category } });
+  }
   // Guards the layout write so a click that doesn't move a block is not persisted.
   const draggingRef = useRef(false);
 
@@ -123,6 +168,37 @@ export function BlockCanvas({
 
   return (
     <div>
+      {suggestions.length > 0 ? (
+        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-zinc-800/80 bg-zinc-950/60 px-3 py-2">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-zinc-600">Suggested</span>
+          {suggestions.map((s) => {
+            const cat = getCat(s.category);
+            return (
+              <div
+                key={s.category}
+                className="flex items-center gap-1.5 rounded-full border border-zinc-800 bg-zinc-900 py-0.5 pl-2 pr-1 text-[11px]"
+              >
+                <span className={'h-1.5 w-1.5 rounded-full ' + cat.dot} />
+                <button
+                  onClick={() => createSuggested(s)}
+                  title={`${s.count} ${s.category} logs, no block yet — add a ${s.type}`}
+                  className="flex items-center gap-1 text-zinc-300 transition-colors hover:text-white"
+                >
+                  <Plus size={11} /> {s.category} <span className="text-zinc-500">{s.type}</span>
+                </button>
+                <button
+                  onClick={() => dismissSuggestion(s.category)}
+                  title="Dismiss"
+                  className="text-zinc-600 transition-colors hover:text-zinc-300"
+                >
+                  <X size={11} />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
+
       {hidden.length > 0 ? (
         <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-zinc-800/80 bg-zinc-950/60 px-3 py-2">
           <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-zinc-600">Hidden</span>

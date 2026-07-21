@@ -22,6 +22,7 @@ import {
   PinOff,
   LogOut, Sun, Moon,
   Settings,
+  Wand2, Lock,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -47,7 +48,8 @@ import { Composer } from "@/components/composer";
 import { BlockCanvas } from "@/components/block-canvas";
 import { getCat } from "@/lib/categories";
 import { uniqueClients, logClients, type Log, type UserSettings } from "@/lib/dashboard-utils";
-import { normalizeTier } from "@/lib/tiers";
+import { normalizeTier, tierAllows, upsellFor } from "@/lib/tiers";
+import { CanvasCommandModal } from "@/components/canvas-command-modal";
 import { useBlocks, useLogs, useLogMutations } from "@/utils/convex/hooks";
 import type { ConvexBlockDoc } from "@/utils/convex/adapters";
 import { ReportsModal } from "@/components/reports-modal";
@@ -68,6 +70,7 @@ export default function CodexApp() {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedClient, setSelectedClient] = useState<string | null>(null);
   const [showReports, setShowReports] = useState(false);
+  const [showCommand, setShowCommand] = useState(false);
   const [previewLog, setPreviewLog] = useState<Log | null>(null);
   const [showConflicts, setShowConflicts] = useState(false);
   const [isLogFeedPinned, setIsLogFeedPinned] = useState(true);
@@ -314,6 +317,16 @@ export default function CodexApp() {
             {conflicts.length > 0 ? (
               <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-amber-500" />
             ) : null}
+          </button>
+          <button
+            onClick={function () {
+              if (tierAllows(tier, "nlCommands")) setShowCommand(true);
+              else toast(upsellFor("nlCommands"), { description: "Upgrade to Pro to reshape your canvas with plain-language commands." });
+            }}
+            title={tierAllows(tier, "nlCommands") ? "Canvas command" : upsellFor("nlCommands")}
+            className="hidden sm:flex h-8 items-center gap-2 rounded-md border border-zinc-800 bg-zinc-900 px-3 text-xs font-medium text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
+          >
+            {tierAllows(tier, "nlCommands") ? <Wand2 size={13} /> : <Lock size={13} />} Command
           </button>
           <button
             onClick={function () { setShowReports(true); }}
@@ -768,6 +781,10 @@ export default function CodexApp() {
 
       {showReports ? (
         <ReportsModal blocks={blocks} logs={allLogs} onClose={function () { setShowReports(false); }} />
+      ) : null}
+
+      {showCommand ? (
+        <CanvasCommandModal onClose={function () { setShowCommand(false); }} />
       ) : null}
 
       {showSettings ? (
