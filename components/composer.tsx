@@ -2,6 +2,8 @@
 
 import { useRef, useState, useEffect, useCallback } from "react";
 import { ArrowUp, Mic, Plus, FileUp, Square, X, FileText, Image } from "lucide-react";
+import { ProjectScopePicker } from "@/components/project-scope-picker";
+import type { Project } from "@/lib/dashboard-utils";
 
 interface ComposerProps {
   value: string;
@@ -14,6 +16,11 @@ interface ComposerProps {
   isProcessing?: boolean;
   onStop?: () => void;
   onMicClick?: () => void;
+  /** Scope this entry is filed under; null = the business as a whole. */
+  scopeProjectId?: string | null;
+  projects?: Project[];
+  onScopeChange?: (projectId: string | null) => void;
+  onCreateProject?: (name: string) => Promise<string>;
 }
 
 function formatSize(bytes: number) {
@@ -26,11 +33,15 @@ export function Composer({
   value, onChange, onSubmit,
   files, onFilesAdded, onFileRemove,
   disabled, isProcessing, onStop, onMicClick,
+  scopeProjectId = null, projects, onScopeChange, onCreateProject,
 }: ComposerProps) {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dragCounter = useRef(0);
   const [isDragging, setIsDragging] = useState(false);
+  const scopeProject = scopeProjectId
+    ? projects?.find((p) => p.id === scopeProjectId)
+    : undefined;
 
   useEffect(() => {
     const handleDragIn = (e: DragEvent) => {
@@ -156,27 +167,42 @@ export function Composer({
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={handleKeyDown}
           onPaste={handlePaste}
-          placeholder="Log an expense, project update, client note..."
+          placeholder={
+            scopeProject
+              ? `Log an update for ${scopeProject.name}...`
+              : "Log an expense, project update, client note..."
+          }
           className="max-h-[200px] w-full resize-none appearance-none border-0 bg-transparent px-4 pb-1 pt-3.5 text-sm text-zinc-100 placeholder-zinc-500 outline-none ring-0 focus:outline-none focus:ring-0"
           rows={1}
           disabled={disabled}
         />
 
-        <div className="flex items-center justify-between px-3 pb-3 pt-1">
-          <label
-            aria-label="Attach files"
-            className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-md border border-zinc-800 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-100"
-          >
-            <Plus size={16} />
-            <input
-              ref={fileInputRef}
-              type="file"
-              className="hidden"
-              onChange={handleFilePickerChange}
-              accept=".csv,.txt,.pdf,.xlsx,image/*"
-              multiple
-            />
-          </label>
+        <div className="flex items-center justify-between gap-2 px-3 pb-3 pt-1">
+          <div className="flex min-w-0 items-center gap-1.5">
+            <label
+              aria-label="Attach files"
+              className="flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-md border border-zinc-800 text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-100"
+            >
+              <Plus size={16} />
+              <input
+                ref={fileInputRef}
+                type="file"
+                className="hidden"
+                onChange={handleFilePickerChange}
+                accept=".csv,.txt,.pdf,.xlsx,image/*"
+                multiple
+              />
+            </label>
+            {onScopeChange ? (
+              <ProjectScopePicker
+                value={scopeProjectId}
+                projects={projects ?? []}
+                onChange={onScopeChange}
+                onCreate={onCreateProject}
+                disabled={disabled}
+              />
+            ) : null}
+          </div>
 
           <div className="flex items-center gap-1.5">
             {onMicClick && (

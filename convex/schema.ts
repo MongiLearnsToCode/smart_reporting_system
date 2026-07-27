@@ -72,6 +72,28 @@ export const blockType = v.union(
 );
 
 export default defineSchema({
+  // User-created projects. A log is either scoped to one of these or to the
+  // whole business (projectId null/absent) — the choice the user makes at entry.
+  projects: defineTable({
+    userId: v.string(),
+    name: v.string(),
+    // Free-text note shown in the picker; helps disambiguate similar names.
+    description: v.optional(v.union(v.string(), v.null())),
+    // Archived projects stay selectable for existing logs but drop out of the
+    // composer/switcher, so the picker doesn't grow forever.
+    archivedAt: v.optional(v.union(v.number(), v.null())),
+    createdAt: v.number(),
+  }).index('by_user', ['userId']),
+
+  // Per-user preferences that reference Convex documents, so they can't live in
+  // the Supabase user_metadata blob the rest of the settings use. One row per
+  // user. defaultProjectId null = "Entire business" is the default scope.
+  userPrefs: defineTable({
+    userId: v.string(),
+    defaultProjectId: v.union(v.id('projects'), v.null()),
+    updatedAt: v.number(),
+  }).index('by_user', ['userId']),
+
   // Adaptive Canvas Blocks (spec §3). userId = Supabase auth subject (JWT `sub`).
   canvasBlocks: defineTable({
     userId: v.string(),
@@ -96,6 +118,9 @@ export default defineSchema({
   // Structured logs — the source data blocks query over (mirrors Supabase `logs`).
   logs: defineTable({
     userId: v.string(),
+    // Entry scope: a project, or null/absent for the business as a whole.
+    // Chosen in the composer, defaulting to userPrefs.defaultProjectId.
+    projectId: v.optional(v.union(v.id('projects'), v.null())),
     rawContent: v.string(),
     type: v.optional(v.union(v.string(), v.null())),
     fileUrl: v.optional(v.union(v.string(), v.null())),
@@ -125,6 +150,10 @@ export default defineSchema({
   })
     .index('by_user_time', ['userId', 'timestamp'])
     .index('by_user_category', ['userId', 'category'])
+    // Scoped reads for the project view, and the reassignment sweep when a
+    // project is deleted. Logs written before projects existed have no
+    // projectId, so this index only ever answers `.eq(projectId, <an id>)`.
+    .index('by_user_project', ['userId', 'projectId'])
     .index('by_source', ['sourceId']),
 
   // Generated reports reference blocks by id, never copy content (spec §9).
@@ -132,6 +161,11 @@ export default defineSchema({
   // storageId so regeneration reflects each block's *current* state.
   reports: defineTable({
     userId: v.string(),
+    // The scope the report covers. Blocks are shared across scopes, so the block
+    // ids alone don't determine the output — without this, regenerating from a
+    // different scope silently produces a different document. Absent on reports
+    // written before scopes existed, which were all business-wide.
+    projectId: v.optional(v.union(v.id('projects'), v.null())),
     includedBlockIds: v.array(v.id('canvasBlocks')),
     range: v.number(),
     title: v.optional(v.string()),

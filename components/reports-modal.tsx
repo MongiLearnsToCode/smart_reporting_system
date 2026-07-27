@@ -12,8 +12,11 @@ import {
 } from "@/utils/client-integrations/shadcn-ui";
 import { BlockBody } from "@/components/block-render";
 import { getCat } from "@/lib/categories";
-import { formatTimeAgo, type Log } from "@/lib/dashboard-utils";
+import { formatTimeAgo, BUSINESS_SCOPE_LABEL, type Log } from "@/lib/dashboard-utils";
 import type { ConvexBlockDoc } from "@/utils/convex/adapters";
+import { useProjects } from "@/utils/convex/hooks";
+import { scopeLabel } from "@/components/project-scope-picker";
+import { resolveRegenerationScope } from "@/lib/report-scope";
 
 const PERIODS = [
   { days: 7, label: "This week" },
@@ -51,10 +54,14 @@ function download(blob: Blob, name: string) {
   setTimeout(() => URL.revokeObjectURL(url), 4000);
 }
 
-export function ReportsModal({ blocks, logs, onClose }: {
+export function ReportsModal({ blocks, logs, onClose, projectId = null, onRequestScope }: {
   blocks: ConvexBlockDoc[];
   logs: Log[];
   onClose: () => void;
+  /** Scope the `logs` prop was drawn from — recorded on every report. */
+  projectId?: string | null;
+  /** Switches the app's view scope, so an out-of-scope report can be regenerated. */
+  onRequestScope?: (projectId: string | null) => void;
 }) {
   const [days, setDays] = useState<number>(7);
   const [title, setTitle] = useState("Progress report");
@@ -69,6 +76,9 @@ export function ReportsModal({ blocks, logs, onClose }: {
   const removeReport = useMutation(api.reports.remove);
 
   const liveIds = useMemo(() => new Set(blocks.map((b) => b._id)), [blocks]);
+
+  const { projects } = useProjects();
+  const currentScope = scopeLabel(projectId, projects);
 
   // Default the selection to report-flagged blocks (spec §9). Keeps syncing with
   // reactive block updates until the user first toggles a checkbox.
@@ -129,7 +139,9 @@ export function ReportsModal({ blocks, logs, onClose }: {
       const { buildReportPdf } = await import("@/utils/report-pdf");
       const blob = await buildReportPdf({
         title: title.trim() || "Progress report",
-        subtitle: periodLabel(days),
+        // The PDF leaves the app, so it has to say which scope it covers on its
+        // own — a project report and a company-wide one look identical otherwise.
+        subtitle: `${currentScope} · ${periodLabel(days)}`,
         generatedAt: new Date().toLocaleString(),
         blocks: images,
       });
@@ -148,10 +160,12 @@ export function ReportsModal({ blocks, logs, onClose }: {
         includedBlockIds: chosen.map((b) => b._id) as never[],
         range: days,
         title: title.trim() || "Progress report",
+        projectId: projectId as never,
       });
 
-      const slug = (title.trim() || "report").toLowerCase().replace(/[^a-z0-9]+/g, "-");
-      download(blob, `${slug}-${days}d.pdf`);
+      const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+      const scopeSlug = projectId ? `${slug(currentScope)}-` : "";
+      download(blob, `${scopeSlug}${slug(title.trim() || "report")}-${days}d.pdf`);
       toast.success("Report generated");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Report generation failed");
@@ -162,7 +176,26 @@ export function ReportsModal({ blocks, logs, onClose }: {
 
   // Regenerate from a past report: re-capture only the block ids that still
   // resolve to live blocks; dangling ids are dropped (spec §9 / §11 Q4).
-  function regenerate(r: { includedBlockIds?: string[]; blockCount: number; title: string | null }) {
+  function regenerate(r: {
+    includedBlockIds?: string[];
+    blockCount: number;
+    title: string | null;
+    projectId: string | null;
+    projectName: string | null;
+  }) {
+    const decision = resolveRegenerationScope(r, projectId, !!onRequestScope);
+    if (decision.action === "block") {
+      toast.error(decision.reason);
+      return;
+    }
+    if (decision.action === "switch") {
+      onRequestScope!(decision.projectId);
+      toast(`Switched to ${decision.scopeName}`, {
+        description: "Press regenerate again to rebuild this report.",
+      });
+      return;
+    }
+
     const ids = (r.includedBlockIds ?? []).filter((id) => liveIds.has(id));
     if (ids.length === 0) {
       toast.error("All of this report's blocks have been deleted");
@@ -189,7 +222,8 @@ export function ReportsModal({ blocks, logs, onClose }: {
                 Export report
               </DialogTitle>
               <p className="mt-0.5 text-xs font-normal text-zinc-500">
-                Pick the blocks to include, then generate a PDF
+                Covers <span className="text-zinc-300">{currentScope}</span> — switch scope in the
+                header to report on something else
               </p>
             </div>
           </div>
@@ -306,6 +340,8 @@ export function ReportsModal({ blocks, logs, onClose }: {
                 <div className="mt-1">
                   {pastReports.map((r, i) => {
                     const stale = r.liveBlocks < r.blockCount;
+                    // Flagged so it's obvious why regenerate switches scope first.
+                    const otherScope = (r.projectId ?? null) !== projectId;
                     return (
                       <div
                         key={r._id}
@@ -328,7 +364,10 @@ export function ReportsModal({ blocks, logs, onClose }: {
                               {r.title ?? "Report"}
                             </p>
                             <p className="flex items-center gap-1.5 font-mono text-[10px] text-zinc-600">
-                              {periodLabel(r.range)} · {r.blockCount} block{r.blockCount === 1 ? "" : "s"}
+                              <span className={otherScope ? "text-violet-400/80" : undefined}>
+                                {r.projectId ? r.projectName ?? "Deleted project" : BUSINESS_SCOPE_LABEL}
+                              </span>
+                              · {periodLabel(r.range)} · {r.blockCount} block{r.blockCount === 1 ? "" : "s"}
                               {stale ? (
                                 <span className="inline-flex items-center gap-1 text-amber-500/80">
                                   <AlertTriangle size={9} /> {r.liveBlocks} live
@@ -342,7 +381,11 @@ export function ReportsModal({ blocks, logs, onClose }: {
                         </a>
                         <div className="flex shrink-0 items-center gap-0.5">
                           <button
-                            title="Regenerate from current block state"
+                            title={
+                              otherScope
+                                ? `Covers a different scope — switch to ${r.projectId ? r.projectName ?? "a deleted project" : BUSINESS_SCOPE_LABEL} to regenerate`
+                                : "Regenerate from current block state"
+                            }
                             onClick={() => regenerate(r)}
                             disabled={busy}
                             className="rounded-md p-1.5 text-zinc-600 transition-colors hover:bg-zinc-800 hover:text-zinc-300 disabled:opacity-40"

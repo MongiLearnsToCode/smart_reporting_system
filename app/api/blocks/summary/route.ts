@@ -4,6 +4,7 @@ import { assertSameOrigin, getClientIp, rateLimit, requireCsrf, toErrorResponse 
 import { callGroq } from '@/utils/api/groq';
 import { convexForUser } from '@/utils/convex/serverClient';
 import { api } from '@/convex/_generated/api';
+import { parseConvexId } from '@/utils/api/validation';
 
 // How many recent logs feed the narrative. Bounded so the prompt stays cheap
 // and the Groq call stays within the latency budget.
@@ -27,6 +28,9 @@ export async function POST(request: NextRequest) {
     if (!blockId) {
       return NextResponse.json({ error: 'blockId is required' }, { status: 400 });
     }
+    // Blocks are shared across scopes, so the narrative must be built from the
+    // scope the canvas is currently showing — not from every log the user has.
+    const projectId = parseConvexId(body?.projectId);
 
     const convex = convexForUser(session.access_token);
     const block = await convex.query(api.blocks.getById, { id: blockId as never });
@@ -38,7 +42,10 @@ export async function POST(request: NextRequest) {
     }
 
     const category = block.queryConfig?.category;
-    const logs = await convex.query(api.logs.list, {});
+    const logs = await convex.query(
+      api.logs.list,
+      projectId ? { projectId: projectId as never } : {},
+    );
     const relevant = logs
       .filter((l) => !l.excludedFromReports && (!category || l.category === category))
       .slice(0, MAX_LOGS)
@@ -56,7 +63,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const scope = category ? `the "${category}" area of the business` : 'the business';
+    let projectName: string | null = null;
+    if (projectId) {
+      const projects = await convex.query(api.projects.list, {});
+      projectName = projects.find((p) => p._id === projectId)?.name ?? null;
+    }
+
+    const subject = projectName ? `the "${projectName}" project` : 'the business';
+    const scope = category ? `the "${category}" area of ${subject}` : subject;
     const summary = await callGroq([
       {
         role: 'system',

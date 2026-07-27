@@ -23,6 +23,7 @@ import {
   LogOut, Sun, Moon,
   Settings,
   Wand2, Lock,
+  FolderOpen,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -50,9 +51,13 @@ import { getCat } from "@/lib/categories";
 import { uniqueClients, logClients, type Log, type UserSettings } from "@/lib/dashboard-utils";
 import { normalizeTier, tierAllows, upsellFor } from "@/lib/tiers";
 import { CanvasCommandModal } from "@/components/canvas-command-modal";
-import { useBlocks, useLogs, useLogMutations } from "@/utils/convex/hooks";
+import {
+  useBlocks, useLogs, useLogMutations,
+  useProjects, useProjectMutations, useDefaultScope,
+} from "@/utils/convex/hooks";
 import type { ConvexBlockDoc } from "@/utils/convex/adapters";
 import { ReportsModal } from "@/components/reports-modal";
+import { ProjectScopePicker, scopeLabel } from "@/components/project-scope-picker";
 
 export default function CodexApp() {
   const queryClient = useQueryClient();
@@ -102,9 +107,43 @@ export default function CodexApp() {
     [user, userLoading],
   );
 
+  // Two scopes, deliberately: `viewScope` is what the canvas and feed show,
+  // `entryScope` is where the next log gets filed. They start equal (from the
+  // user's default) and entryScope follows viewScope, but the composer can
+  // override it for a one-off entry without disturbing the view.
+  const { projects } = useProjects();
+  const { defaultProjectId, loading: scopeLoading } = useDefaultScope();
+  const projectMutations = useProjectMutations();
+  const [viewScope, setViewScope] = useState<string | null>(null);
+  const [entryScope, setEntryScope] = useState<string | null>(null);
+  const scopeInitialized = useRef(false);
+
+  // Adopt the saved default once, on first load. Later changes in settings must
+  // not yank the scope out from under an in-progress entry.
+  useEffect(
+    function () {
+      if (scopeLoading || scopeInitialized.current) return;
+      scopeInitialized.current = true;
+      setViewScope(defaultProjectId);
+      setEntryScope(defaultProjectId);
+    },
+    [scopeLoading, defaultProjectId],
+  );
+
+  function handleViewScopeChange(projectId: string | null) {
+    setViewScope(projectId);
+    setEntryScope(projectId);
+    setSelectedCategory(null);
+    setSelectedClient(null);
+  }
+
+  async function handleCreateProject(name: string) {
+    return (await projectMutations.create({ name })) as unknown as string;
+  }
+
   // Convex is the reactive source for logs + blocks (spec §7). No manual
   // refetching — subscriptions push updates within the 2s SLA.
-  const { logs: allLogsRaw } = useLogs();
+  const { logs: allLogsRaw } = useLogs(viewScope);
   const { blocks } = useBlocks();
   const logMutations = useLogMutations();
 
@@ -150,7 +189,12 @@ export default function CodexApp() {
   });
 
   const processMutation = useMutation({
-    mutationFn: async function (payload: { rawContent: string; type: string; fileUrl?: string }) {
+    mutationFn: async function (payload: {
+      rawContent: string;
+      type: string;
+      fileUrl?: string;
+      projectId?: string | null;
+    }) {
       const controller = new AbortController();
       abortRef.current = controller;
       const res = await csrfFetch("/api/process", {
@@ -197,7 +241,11 @@ export default function CodexApp() {
 
     try {
       if (inputText.trim()) {
-        await processMutation.mutateAsync({ rawContent: inputText, type: "text" });
+        await processMutation.mutateAsync({
+          rawContent: inputText,
+          type: "text",
+          projectId: entryScope,
+        });
       }
 
       for (const file of files) {
@@ -231,6 +279,7 @@ export default function CodexApp() {
           rawContent: rawContent,
           type: "file",
           fileUrl: uploadResult.url,
+          projectId: entryScope,
         });
       }
 
@@ -294,6 +343,14 @@ export default function CodexApp() {
             <div className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
             Live
           </div>
+          <div className="h-5 w-px bg-zinc-800" />
+          <ProjectScopePicker
+            variant="header"
+            value={viewScope}
+            projects={projects}
+            onChange={handleViewScopeChange}
+            onCreate={handleCreateProject}
+          />
         </div>
         <div className="flex items-center gap-3">
           {!isLogFeedPinned && (
@@ -442,7 +499,13 @@ export default function CodexApp() {
               ).toLocaleDateString()}
             </motion.div>
           ) : null}
-          <BlockCanvas blocks={blocks} logs={allLogs} onViewSource={setSourceBlock} tier={tier} />
+          <BlockCanvas
+            blocks={blocks}
+            logs={allLogs}
+            onViewSource={setSourceBlock}
+            tier={tier}
+            projectId={viewScope}
+          />
         </main>
 
         <AnimatePresence>
@@ -548,7 +611,9 @@ export default function CodexApp() {
                     <p className="text-xs font-medium text-center">
                       {selectedCategory
                         ? "No logs for " + selectedCategory
-                        : "No logs yet. Start by typing below."}
+                        : viewScope
+                          ? "No logs for " + scopeLabel(viewScope, projects) + " yet."
+                          : "No logs yet. Start by typing below."}
                     </p>
                   </div>
                 ) : null}
@@ -614,6 +679,14 @@ export default function CodexApp() {
             ) : null}
           </AnimatePresence>
 
+          {entryScope !== viewScope ? (
+            <div className="flex items-center gap-2 rounded-full border border-violet-500/25 bg-violet-500/10 px-3.5 py-1 text-[11px] font-medium text-violet-300 shadow-lg backdrop-blur-xl">
+              <FolderOpen size={11} />
+              Filing to {scopeLabel(entryScope, projects)} — won&rsquo;t show in the{" "}
+              {scopeLabel(viewScope, projects)} view
+            </div>
+          ) : null}
+
           <Composer
             value={inputText}
             onChange={setInputText}
@@ -623,6 +696,10 @@ export default function CodexApp() {
             onFileRemove={handleFileRemove}
             isProcessing={isProcessing}
             onStop={handleStop}
+            scopeProjectId={entryScope}
+            projects={projects}
+            onScopeChange={setEntryScope}
+            onCreateProject={handleCreateProject}
           />
         </div>
       </div>
@@ -780,7 +857,13 @@ export default function CodexApp() {
       </AnimatePresence>
 
       {showReports ? (
-        <ReportsModal blocks={blocks} logs={allLogs} onClose={function () { setShowReports(false); }} />
+        <ReportsModal
+          blocks={blocks}
+          logs={allLogs}
+          projectId={viewScope}
+          onRequestScope={handleViewScopeChange}
+          onClose={function () { setShowReports(false); }}
+        />
       ) : null}
 
       {showCommand ? (

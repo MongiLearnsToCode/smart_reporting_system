@@ -9,6 +9,7 @@ import {
 } from "@/utils/client-integrations/shadcn-ui";
 import { Settings } from "lucide-react";
 import { CURRENCIES, TIMEZONES, LANGUAGES, type UserSettings } from "@/lib/dashboard-utils";
+import { ProjectsSettings } from "@/components/projects-settings";
 
 // Spec §10: monetisation is by block capability. Free already gets all six
 // block types; paid tiers unlock manipulation power.
@@ -106,6 +107,10 @@ export function SettingsModal({ settings, onSave, onClose }: {
                 })}
               </div>
             </section>
+
+            {/* Saves immediately to Convex — it does not ride along with the
+                form's Save button, which only writes the user_metadata blob. */}
+            <ProjectsSettings />
 
             <section className="space-y-4 rounded-lg border border-zinc-800/80 bg-zinc-900/40 p-4">
               <SectionLabel>Currency & Finance</SectionLabel>

@@ -42,13 +42,19 @@ export function parseSettings(input: unknown) {
   };
 }
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// Document ids are Convex ids now, not Supabase UUIDs — an opaque base32-ish
+// string. Shape-check only; ownership is enforced by the Convex function.
+const CONVEX_ID_RE = /^[a-z0-9]{16,64}$/i;
+
+export function parseConvexId(value: unknown) {
+  return typeof value === 'string' && CONVEX_ID_RE.test(value) ? value : null;
+}
 
 export function parseProcessPayload(input: unknown) {
   const body = input && typeof input === 'object' ? input as Record<string, unknown> : {};
   const rawContent = typeof body.rawContent === 'string' ? body.rawContent.trim() : '';
   // A retry payload carries only the logId; the server re-reads stored content.
-  const logId = !rawContent && typeof body.logId === 'string' && UUID_RE.test(body.logId) ? body.logId : null;
+  const logId = !rawContent ? parseConvexId(body.logId) : null;
   if (!rawContent && !logId) throw new Error('Log content is required');
   if (rawContent.length > 12000) throw new Error('Log content is too long');
 
@@ -57,7 +63,10 @@ export function parseProcessPayload(input: unknown) {
     ? body.fileUrl
     : null;
 
-  return { rawContent, type, fileUrl, logId };
+  // Entry scope: a project id, or null for the business as a whole.
+  const projectId = parseConvexId(body.projectId);
+
+  return { rawContent, type, fileUrl, logId, projectId };
 }
 
 export function parseCorrectionPayload(input: unknown) {

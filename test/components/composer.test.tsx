@@ -95,6 +95,27 @@ describe('Composer', () => {
     expect(onMicClick).toHaveBeenCalledOnce();
   });
 
+  it('omits the scope picker unless onScopeChange is wired', () => {
+    renderComposer();
+    expect(screen.queryByRole('button', { name: /^scope:/i })).not.toBeInTheDocument();
+  });
+
+  it('shows the entry scope and forwards a change', () => {
+    const onScopeChange = vi.fn();
+    renderComposer({
+      onScopeChange,
+      scopeProjectId: 'p1',
+      projects: [{ id: 'p1', name: 'Acme Rebrand', archived: false, created_at: 1 }],
+    });
+    expect(screen.getByRole('button', { name: 'Scope: Acme Rebrand' })).toBeInTheDocument();
+    // The placeholder names the scope, so what the entry attaches to is visible.
+    expect(screen.getByPlaceholderText(/log an update for acme rebrand/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Scope: Acme Rebrand' }));
+    fireEvent.click(screen.getByRole('option', { name: /entire business/i }));
+    expect(onScopeChange).toHaveBeenCalledWith(null);
+  });
+
   it('disables the textarea and send button when disabled', () => {
     renderComposer({ disabled: true, value: 'text present' });
     expect(screen.getByPlaceholderText(/log an expense/i)).toBeDisabled();

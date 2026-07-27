@@ -14,6 +14,7 @@ import type * as lib_identity from "../lib/identity.js";
 import type * as lib_layout from "../lib/layout.js";
 import type * as logs from "../logs.js";
 import type * as migrate from "../migrate.js";
+import type * as projects from "../projects.js";
 import type * as reports from "../reports.js";
 
 import type {
@@ -29,6 +30,7 @@ declare const fullApi: ApiFromModules<{
   "lib/layout": typeof lib_layout;
   logs: typeof logs;
   migrate: typeof migrate;
+  projects: typeof projects;
   reports: typeof reports;
 }>;
 

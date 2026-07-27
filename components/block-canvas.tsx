@@ -43,11 +43,14 @@ export function BlockCanvas({
   logs,
   onViewSource,
   tier = 'free',
+  projectId = null,
 }: {
   blocks: ConvexBlockDoc[];
   logs: Log[];
   onViewSource: (block: ConvexBlockDoc) => void;
   tier?: Tier;
+  /** Scope the canvas is showing; narrows AI summaries to the same logs. */
+  projectId?: string | null;
 }) {
   const m = useBlockMutations();
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -106,7 +109,7 @@ export function BlockCanvas({
       const res = await csrfFetch('/api/blocks/summary', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ blockId: block._id }),
+        body: JSON.stringify({ blockId: block._id, projectId }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));

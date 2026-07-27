@@ -3,9 +3,19 @@
 // unchanged against the new data layer.
 import type { Log, LogEntity, Widget } from '@/lib/dashboard-utils';
 
+export type ConvexProjectDoc = {
+  _id: string;
+  userId: string;
+  name: string;
+  description?: string | null;
+  archivedAt?: number | null;
+  createdAt: number;
+};
+
 export type ConvexLogDoc = {
   _id: string;
   userId: string;
+  projectId?: string | null;
   rawContent: string;
   type?: string | null;
   fileUrl?: string | null;
@@ -41,6 +51,7 @@ export function convexLogToLog(doc: ConvexLogDoc): Log {
   return {
     id: doc._id,
     user_id: doc.userId,
+    project_id: doc.projectId ?? null,
     raw_content: doc.rawContent,
     type: doc.type ?? '',
     file_url: doc.fileUrl ?? undefined,

@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
     const parsed = parseProcessPayload(await request.json());
 
     // Retry path: reuse the stored raw content and overwrite the same Convex doc.
-    let { rawContent, type, fileUrl } = parsed;
+    let { rawContent, type, fileUrl, projectId } = parsed;
     let retryLogId: string | null = null;
     if (parsed.logId) {
       const row = await convex.query(api.logs.getById, { id: parsed.logId as any });
@@ -39,6 +39,20 @@ export async function POST(request: NextRequest) {
       rawContent = row.rawContent;
       type = row.type === 'file' ? 'file' : 'text';
       fileUrl = row.fileUrl ?? null;
+      // A retry re-extracts the same entry; it must not silently change scope.
+      projectId = row.projectId ?? null;
+    }
+
+    // Naming the scope in the prompt keeps the extractor from inventing a
+    // different project for an entry the user already filed under one.
+    let projectName: string | null = null;
+    if (projectId) {
+      const projects = await convex.query(api.projects.list, {});
+      const match = projects.find((p: { _id: string }) => p._id === projectId);
+      if (!match) {
+        return NextResponse.json({ error: 'Project not found' }, { status: 404 });
+      }
+      projectName = match.name;
     }
 
     // Settings live in auth user_metadata; the user_settings table has no grants.
@@ -72,6 +86,9 @@ export async function POST(request: NextRequest) {
       knownClients.length
         ? `Known clients: ${knownClients.join(', ')}. If the entry refers to one of these (even loosely, e.g. an abbreviation), use the EXACT known spelling. Only introduce a new client name if it clearly is not one of the known clients.`
         : 'If the entry names a client/customer the work is for, extract that name; otherwise use null.',
+      projectName
+        ? `This entry was filed under the project "${projectName}". Use exactly that string for "project" on every entity unless the text explicitly names a different project.`
+        : 'This entry covers the business as a whole, not one project. Only set "project" if the text itself names one.',
     ].join('\n');
 
     let entities: LogEntity[] | null = null;
@@ -90,6 +107,7 @@ export async function POST(request: NextRequest) {
     if (!entities) {
       const logId = await convex.mutation(api.logs.ingest, {
         logId: (retryLogId ?? undefined) as any,
+        projectId: projectId as any,
         rawContent,
         type,
         fileUrl: fileUrl ?? null,
@@ -121,6 +139,7 @@ export async function POST(request: NextRequest) {
         category,
         sinceMs: Date.now() - conflictDismissDays * 86400000,
         excludeId: (retryLogId ?? undefined) as any,
+        projectId: projectId as any,
       });
     }
 
@@ -168,6 +187,7 @@ Return: { "duplicate": boolean, "source_index": number | null, "reason": string 
     // if none exists (spec §6). Subscribers see the update within the §7 budget.
     const logId = await convex.mutation(api.logs.ingest, {
       logId: (retryLogId ?? undefined) as any,
+      projectId: projectId as any,
       rawContent,
       type,
       fileUrl: fileUrl ?? null,

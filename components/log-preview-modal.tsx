@@ -10,7 +10,7 @@ import { toast } from "sonner";
 import { getCat, CATEGORIES } from "@/lib/categories";
 import { FilePreviewModal } from "@/components/file-preview-modal";
 import { primaryEntity, entitiesOf, type Log } from "@/lib/dashboard-utils";
-import { useLogMutations } from "@/utils/convex/hooks";
+import { useLogMutations, useProjects } from "@/utils/convex/hooks";
 
 export function LogPreviewModal({ log, onClose, allLogs }: {
   log: Log | null;
@@ -21,7 +21,8 @@ export function LogPreviewModal({ log, onClose, allLogs }: {
   // Optimistic exclude state so the button flips the instant it's clicked,
   // before the Convex round-trip lands (spec §8 trust action must feel direct).
   const [pendingExcluded, setPendingExcluded] = useState<boolean | null>(null);
-  const { applyCorrection, setExcluded } = useLogMutations();
+  const { applyCorrection, setExcluded, setProject } = useLogMutations();
+  const { projects } = useProjects();
 
   // Read exclusion from the reactive feed, not the (frozen) prop snapshot, so
   // this modal reflects the change live rather than only via a toast.
@@ -50,6 +51,22 @@ export function LogPreviewModal({ log, onClose, allLogs }: {
       toast.success("Category corrected — derived blocks will update");
     } catch {
       toast.error("Could not apply correction");
+    }
+  }
+
+  // Refiling an entry moves it between the business-wide and project views;
+  // the change is recorded in the same corrections trail as a field edit.
+  async function correctProject(projectId: string | null) {
+    if (!log || projectId === (liveLog.project_id ?? null)) return;
+    try {
+      await setProject({ id: log.id as never, projectId: projectId as never });
+      toast.success(
+        projectId
+          ? `Moved to ${projects.find((p) => p.id === projectId)?.name ?? "project"}`
+          : "Moved to the whole business",
+      );
+    } catch {
+      toast.error("Could not change scope");
     }
   }
 
@@ -269,7 +286,22 @@ export function LogPreviewModal({ log, onClose, allLogs }: {
         ) : null}
 
         {/* Trust actions — correct or exclude directly from the modal (spec §8). */}
-        <div className="flex items-center justify-between gap-3 px-6 py-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4">
+          <label className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-zinc-500">
+            Scope
+            <select
+              value={liveLog.project_id ?? ""}
+              onChange={(e) => correctProject(e.target.value || null)}
+              className="max-w-[180px] rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 text-[12px] font-normal normal-case text-zinc-200 outline-none focus:border-zinc-600"
+            >
+              <option value="">Entire business</option>
+              {projects
+                .filter((p) => !p.archived || p.id === liveLog.project_id)
+                .map((p) => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+            </select>
+          </label>
           <label className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-zinc-500">
             Category
             <select

@@ -58,9 +58,22 @@ export type Entities = {
   tags?: string[];
 };
 
+/** How the business-wide scope (no project) is named throughout the UI. */
+export const BUSINESS_SCOPE_LABEL = "Entire business";
+
+export type Project = {
+  id: string;
+  name: string;
+  description?: string | null;
+  archived: boolean;
+  created_at: number;
+};
+
 export type Log = {
   id: string;
   user_id: string;
+  /** Project this entry was filed under; null = the business as a whole. */
+  project_id?: string | null;
   raw_content: string;
   type: string;
   file_url?: string;

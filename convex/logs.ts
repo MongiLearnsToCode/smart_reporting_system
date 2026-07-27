@@ -12,13 +12,28 @@ const processingStatus = v.union(
 );
 
 // Reactive log feed — the source subscription that drives block updates (spec §7).
+// `projectId` narrows the feed to one project's entries; omitting it returns
+// everything, which is what the "Entire business" scope shows.
 export const list = query({
-  args: { category: v.optional(v.string()), sinceMs: v.optional(v.number()) },
+  args: {
+    category: v.optional(v.string()),
+    sinceMs: v.optional(v.number()),
+    projectId: v.optional(v.id('projects')),
+  },
   handler: async (ctx, args) => {
     const userId = await optionalUserId(ctx);
     if (!userId) return [];
     let rows;
-    if (args.category) {
+    if (args.projectId) {
+      rows = await ctx.db
+        .query('logs')
+        .withIndex('by_user_project', (q) =>
+          q.eq('userId', userId).eq('projectId', args.projectId),
+        )
+        .collect();
+      if (args.category) rows = rows.filter((r) => r.category === args.category);
+      rows.sort((a, b) => b.timestamp - a.timestamp);
+    } else if (args.category) {
       rows = await ctx.db
         .query('logs')
         .withIndex('by_user_category', (q) =>
@@ -74,15 +89,24 @@ export const knownClients = query({
 
 // Recent logs in a category within a window, for conflict detection
 // (ported from app/api/process/route.ts:141-153).
+// Comparison is confined to the entry's own scope: a project update and a
+// business-wide note aren't duplicates of each other even when they read alike.
 export const recentInCategory = query({
-  args: { category: v.string(), sinceMs: v.number(), excludeId: v.optional(v.id('logs')) },
-  handler: async (ctx, { category, sinceMs, excludeId }) => {
+  args: {
+    category: v.string(),
+    sinceMs: v.number(),
+    excludeId: v.optional(v.id('logs')),
+    projectId: v.optional(v.union(v.id('projects'), v.null())),
+  },
+  handler: async (ctx, { category, sinceMs, excludeId, projectId }) => {
     const userId = await requireUserId(ctx);
+    const scope = projectId ?? null;
     const rows = await ctx.db
       .query('logs')
       .withIndex('by_user_category', (q) => q.eq('userId', userId).eq('category', category))
       .collect();
     return rows
+      .filter((r) => (r.projectId ?? null) === scope)
       .filter((r) => r.timestamp >= sinceMs && r._id !== excludeId)
       .sort((a, b) => b.timestamp - a.timestamp)
       .slice(0, 5)
@@ -129,6 +153,8 @@ async function ensureCategoryBlock(ctx: any, userId: string, category: string) {
 export const ingest = mutation({
   args: {
     logId: v.optional(v.id('logs')),
+    // Entry scope chosen in the composer. Absent/null = the whole business.
+    projectId: v.optional(v.union(v.id('projects'), v.null())),
     rawContent: v.string(),
     type: v.optional(v.union(v.string(), v.null())),
     fileUrl: v.optional(v.union(v.string(), v.null())),
@@ -144,8 +170,18 @@ export const ingest = mutation({
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
     const { logId, ...rest } = args;
+
+    // Reject a scope the caller doesn't own rather than silently filing the
+    // entry under the wrong project.
+    let projectId = rest.projectId ?? null;
+    if (projectId) {
+      const project = await ctx.db.get(projectId);
+      if (!project || project.userId !== userId) throw new Error('Project not found');
+    }
+
     const fields = {
       userId,
+      projectId,
       rawContent: rest.rawContent,
       type: rest.type ?? null,
       fileUrl: rest.fileUrl ?? null,
@@ -215,6 +251,31 @@ export const remove = mutation({
     const log = await ctx.db.get(id);
     if (!log || log.userId !== userId) throw new Error('Log not found');
     await ctx.db.delete(id);
+  },
+});
+
+// Reassign an already-filed entry to a different project (or back to the whole
+// business). Recorded in the same append-only corrections trail as field edits.
+export const setProject = mutation({
+  args: { id: v.id('logs'), projectId: v.union(v.id('projects'), v.null()) },
+  handler: async (ctx, { id, projectId }) => {
+    const userId = await requireUserId(ctx);
+    const log = await ctx.db.get(id);
+    if (!log || log.userId !== userId) throw new Error('Log not found');
+
+    if (projectId) {
+      const project = await ctx.db.get(projectId);
+      if (!project || project.userId !== userId) throw new Error('Project not found');
+    }
+    if ((log.projectId ?? null) === projectId) return;
+
+    await ctx.db.patch(id, {
+      projectId,
+      corrections: [
+        ...(log.corrections ?? []),
+        { field: 'projectId', from: log.projectId ?? null, to: projectId, at: Date.now() },
+      ],
+    });
   },
 });
 

@@ -6,8 +6,9 @@ import {
   convexLogToLog,
   type ConvexBlockDoc,
   type ConvexLogDoc,
+  type ConvexProjectDoc,
 } from './adapters';
-import type { Log } from '@/lib/dashboard-utils';
+import type { Log, Project } from '@/lib/dashboard-utils';
 
 // Reactive blocks feed (spec §7). Returns raw Convex block docs — the canvas
 // needs layout/visible/pinned/includeInReports, not just the adapted Widget.
@@ -17,13 +18,62 @@ export function useBlocks(): { blocks: ConvexBlockDoc[]; loading: boolean } {
 }
 
 // Reactive logs feed, adapted to the existing snake_case Log shape so all the
-// current helpers/components keep working.
-export function useLogs(): { logs: Log[]; loading: boolean } {
-  const docs = useConvexQuery(api.logs.list, {}) as unknown as ConvexLogDoc[] | undefined;
+// current helpers/components keep working. Pass a projectId to narrow the feed
+// to one project; omit it for the whole business.
+export function useLogs(projectId?: string | null): { logs: Log[]; loading: boolean } {
+  const docs = useConvexQuery(
+    api.logs.list,
+    projectId ? { projectId: projectId as never } : {},
+  ) as unknown as ConvexLogDoc[] | undefined;
   return {
     logs: docs ? docs.map(convexLogToLog) : [],
     loading: docs === undefined,
   };
+}
+
+// Reactive project list. `loading` matters here: the composer must not fall back
+// to business-wide scope just because projects haven't arrived yet.
+export function useProjects(): { projects: Project[]; loading: boolean } {
+  const docs = useConvexQuery(api.projects.list) as unknown as ConvexProjectDoc[] | undefined;
+  return {
+    projects: docs
+      ? docs.map((d) => ({
+          id: d._id,
+          name: d.name,
+          description: d.description ?? null,
+          archived: !!d.archivedAt,
+          created_at: d.createdAt,
+        }))
+      : [],
+    loading: docs === undefined,
+  };
+}
+
+// The user's default entry scope (null = entire business), plus its setter.
+export function useDefaultScope(): {
+  defaultProjectId: string | null;
+  loading: boolean;
+  setDefaultScope: (projectId: string | null) => Promise<void>;
+} {
+  const result = useConvexQuery(api.projects.defaultScope) as
+    | { defaultProjectId: string | null }
+    | undefined;
+  const setDefaultScope = useConvexMutation(api.projects.setDefaultScope);
+  return {
+    defaultProjectId: result?.defaultProjectId ?? null,
+    loading: result === undefined,
+    setDefaultScope: async (projectId) => {
+      await setDefaultScope({ projectId: projectId as never });
+    },
+  };
+}
+
+export function useProjectMutations() {
+  const create = useConvexMutation(api.projects.create);
+  const update = useConvexMutation(api.projects.update);
+  const setArchived = useConvexMutation(api.projects.setArchived);
+  const remove = useConvexMutation(api.projects.remove);
+  return { create, update, setArchived, remove };
 }
 
 // The full §4 behaviour contract, as callable mutations.
@@ -45,6 +95,7 @@ export function useBlockMutations() {
 export function useLogMutations() {
   const applyCorrection = useConvexMutation(api.logs.applyCorrection);
   const setExcluded = useConvexMutation(api.logs.setExcluded);
+  const setProject = useConvexMutation(api.logs.setProject);
   const remove = useConvexMutation(api.logs.remove);
-  return { applyCorrection, setExcluded, remove };
+  return { applyCorrection, setExcluded, setProject, remove };
 }

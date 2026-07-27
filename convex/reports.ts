@@ -22,9 +22,17 @@ export const create = mutation({
     includedBlockIds: v.array(v.id('canvasBlocks')),
     range: v.number(),
     title: v.optional(v.string()),
+    // Scope the PDF was rendered from; null = the business as a whole.
+    projectId: v.optional(v.union(v.id('projects'), v.null())),
   },
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
+
+    const projectId = args.projectId ?? null;
+    if (projectId) {
+      const project = await ctx.db.get(projectId);
+      if (!project || project.userId !== userId) throw new Error('Project not found');
+    }
 
     const owned: (typeof args.includedBlockIds)[number][] = [];
     for (const id of args.includedBlockIds) {
@@ -34,6 +42,7 @@ export const create = mutation({
 
     return ctx.db.insert('reports', {
       userId,
+      projectId,
       storageId: args.storageId,
       includedBlockIds: owned,
       range: args.range,
@@ -65,6 +74,12 @@ export const list = query({
           const block = await ctx.db.get(id);
           if (block && !block.deletedAt) liveBlocks++;
         }
+        // Resolve the scope's name here so the list can label each report
+        // without a second round-trip. A deleted project leaves the id in place
+        // with a null name — the report still says it wasn't business-wide.
+        const projectId = r.projectId ?? null;
+        const project = projectId ? await ctx.db.get(projectId) : null;
+
         return {
           _id: r._id,
           title: r.title ?? null,
@@ -74,6 +89,8 @@ export const list = query({
           includedBlockIds: r.includedBlockIds as string[],
           blockCount: r.includedBlockIds.length,
           liveBlocks,
+          projectId: projectId as string | null,
+          projectName: project && project.userId === userId ? project.name : null,
         };
       }),
     );
