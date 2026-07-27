@@ -17,6 +17,9 @@ import type { ConvexBlockDoc } from "@/utils/convex/adapters";
 import { useProjects } from "@/utils/convex/hooks";
 import { scopeLabel } from "@/components/project-scope-picker";
 import { resolveRegenerationScope } from "@/lib/report-scope";
+import { csrfFetch } from "@/utils/api/csrf";
+import { financialRows, highlightStats } from "@/lib/report-tables";
+import type { Brief } from "@/lib/report-assemble";
 
 const PERIODS = [
   { days: 7, label: "This week" },
@@ -67,6 +70,9 @@ export function ReportsModal({ blocks, logs, onClose, projectId = null, onReques
   const [title, setTitle] = useState("Progress report");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
+  const [stage, setStage] = useState<string | null>(null);
+  // Last generated brief, kept so the prose stays on screen after export.
+  const [preview, setPreview] = useState<Brief | null>(null);
   const touched = useRef(false);
   const nodeRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
@@ -80,11 +86,19 @@ export function ReportsModal({ blocks, logs, onClose, projectId = null, onReques
   const { projects } = useProjects();
   const currentScope = scopeLabel(projectId, projects);
 
-  // Default the selection to report-flagged blocks (spec §9). Keeps syncing with
-  // reactive block updates until the user first toggles a checkbox.
+  // Figures are supporting evidence now that prose carries the report, so the
+  // default is the visual block types only, capped — a brief that opens with
+  // six screenshots isn't a brief. Stops syncing once the user picks manually.
   useEffect(() => {
     if (touched.current) return;
-    setSelected(new Set(blocks.filter((b) => b.includeInReports).map((b) => b._id)));
+    setSelected(
+      new Set(
+        blocks
+          .filter((b) => b.includeInReports && (b.type === "chart" || b.type === "timeline"))
+          .slice(0, 3)
+          .map((b) => b._id),
+      ),
+    );
   }, [blocks]);
 
   // Logs constrained to the chosen period — the capture stage renders each block
@@ -110,40 +124,53 @@ export function ReportsModal({ blocks, logs, onClose, projectId = null, onReques
 
   async function generate(ids: string[]) {
     const chosen = blocks.filter((b) => ids.includes(b._id));
-    if (chosen.length === 0) {
-      toast.error("Select at least one block");
-      return;
-    }
     setBusy(true);
     try {
-      // Let recharts/layout settle in the offscreen stage before rasterizing.
-      await new Promise((r) => setTimeout(r, 350));
-      const { toPng } = await import("html-to-image");
+      // The narrative is the report. It's built server-side from the same
+      // scoped logs the canvas shows, so figures are optional supporting
+      // evidence rather than the document itself.
+      setStage("Writing the brief…");
+      const briefRes = await csrfFetch("/api/reports/brief", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ days, projectId, title: title.trim() || "Progress report" }),
+      });
+      const briefData = await briefRes.json();
+      if (!briefRes.ok) throw new Error(briefData.error || "Could not write the brief");
+      const brief: Brief = briefData.brief;
+      setPreview(brief);
 
       const images: { title: string; image: string }[] = [];
-      for (const b of chosen) {
-        const node = nodeRefs.current.get(b._id);
-        if (!node) continue;
-        const image = await toPng(node, {
-          pixelRatio: 2,
-          backgroundColor: "#09090b",
-          cacheBust: true,
-        });
-        images.push({ title: b.title, image });
-      }
-      if (images.length === 0) {
-        toast.error("Nothing to capture");
-        return;
+      if (chosen.length > 0) {
+        setStage("Rendering figures…");
+        // Let recharts/layout settle in the offscreen stage before rasterizing.
+        await new Promise((r) => setTimeout(r, 350));
+        const { toPng } = await import("html-to-image");
+        for (const b of chosen) {
+          const node = nodeRefs.current.get(b._id);
+          if (!node) continue;
+          const image = await toPng(node, {
+            pixelRatio: 2,
+            backgroundColor: "#09090b",
+            cacheBust: true,
+          });
+          images.push({ title: b.title, image });
+        }
       }
 
+      setStage("Rendering PDF…");
       const { buildReportPdf } = await import("@/utils/report-pdf");
       const blob = await buildReportPdf({
-        title: title.trim() || "Progress report",
+        title: brief.title,
         // The PDF leaves the app, so it has to say which scope it covers on its
         // own — a project report and a company-wide one look identical otherwise.
-        subtitle: `${currentScope} · ${periodLabel(days)}`,
-        generatedAt: new Date().toLocaleString(),
-        blocks: images,
+        scopeLabel: brief.scopeLabel,
+        periodLabel: brief.periodLabel,
+        generatedAt: new Date(brief.generatedAt).toLocaleString(),
+        sections: brief.sections.map((s) => ({ title: s.title, body: s.body })),
+        stats: highlightStats(brief.facts),
+        financialRows: financialRows(brief.facts),
+        figures: images,
       });
 
       const uploadUrl = await generateUploadUrl();
@@ -171,6 +198,7 @@ export function ReportsModal({ blocks, logs, onClose, projectId = null, onReques
       toast.error(err instanceof Error ? err.message : "Report generation failed");
     } finally {
       setBusy(false);
+      setStage(null);
     }
   }
 
@@ -196,16 +224,18 @@ export function ReportsModal({ blocks, logs, onClose, projectId = null, onReques
       return;
     }
 
+    // Deleted blocks only cost the report their figure — the narrative is
+    // rebuilt from the logs regardless, so regeneration still goes ahead.
     const ids = (r.includedBlockIds ?? []).filter((id) => liveIds.has(id));
-    if (ids.length === 0) {
-      toast.error("All of this report's blocks have been deleted");
-      return;
-    }
     const skipped = r.blockCount - ids.length;
     touched.current = true;
     setSelected(new Set(ids));
     if (r.title) setTitle(r.title);
-    if (skipped > 0) toast(`Skipping ${skipped} deleted block${skipped === 1 ? "" : "s"}`);
+    if (skipped > 0) {
+      toast(`Skipping ${skipped} deleted figure${skipped === 1 ? "" : "s"}`, {
+        description: "The written brief is rebuilt from the underlying logs.",
+      });
+    }
     void generate(ids);
   }
 
@@ -267,14 +297,18 @@ export function ReportsModal({ blocks, logs, onClose, projectId = null, onReques
 
               <div className="space-y-2">
                 <div className="flex items-baseline justify-between">
-                  <SectionLabel>Blocks</SectionLabel>
+                  <SectionLabel>Figures — optional</SectionLabel>
                   <span className="font-mono text-[10.5px] text-zinc-600">
                     {selected.size} of {blocks.length} selected
                   </span>
                 </div>
+                <p className="text-[11px] leading-relaxed text-zinc-600">
+                  The report is written prose. Add charts only where they show
+                  something the text can&rsquo;t.
+                </p>
                 {blocks.length === 0 ? (
                   <p className="text-xs leading-relaxed text-zinc-600">
-                    No blocks yet — log something to seed your canvas first.
+                    No blocks yet — the brief still writes itself from your logs.
                   </p>
                 ) : (
                   <div className="max-h-52 space-y-0.5 overflow-y-auto rounded-md border border-zinc-800 bg-zinc-900/60 p-1">
@@ -306,14 +340,14 @@ export function ReportsModal({ blocks, logs, onClose, projectId = null, onReques
 
               <Button
                 onClick={() => generate([...selected])}
-                disabled={busy || selected.size === 0}
+                disabled={busy}
                 variant="outline"
                 className="w-full gap-2 border-violet-500/30 bg-violet-500/10 text-[13px] font-medium text-violet-300 hover:bg-violet-500/20 hover:text-violet-200 disabled:opacity-40"
               >
                 {busy ? (
                   <>
                     <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-violet-400 border-t-transparent" />
-                    Rendering PDF…
+                    {stage ?? "Working…"}
                   </>
                 ) : (
                   <>
@@ -322,6 +356,25 @@ export function ReportsModal({ blocks, logs, onClose, projectId = null, onReques
                 )}
               </Button>
             </div>
+
+            {preview ? (
+              <div className="space-y-4 rounded-lg border border-zinc-800/80 bg-zinc-900/40 p-4">
+                <div className="flex items-baseline justify-between">
+                  <SectionLabel>Brief</SectionLabel>
+                  <span className="font-mono text-[10.5px] text-zinc-600">
+                    {preview.scopeLabel} · {preview.periodLabel}
+                  </span>
+                </div>
+                {preview.sections.map((s) => (
+                  <div key={s.id} className="space-y-1.5">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-zinc-500">
+                      {s.title}
+                    </p>
+                    <p className="text-[12.5px] leading-relaxed text-zinc-300">{s.body}</p>
+                  </div>
+                ))}
+              </div>
+            ) : null}
 
             <div className="rounded-lg border border-zinc-800/80 bg-zinc-900/40 p-4">
               <div className="flex items-baseline justify-between">

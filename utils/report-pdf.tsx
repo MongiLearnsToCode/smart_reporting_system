@@ -1,93 +1,242 @@
-// Assembles captured block images into a PDF via @react-pdf/renderer (spec §9).
+// Renders an executive brief to PDF via @react-pdf/renderer.
+//
+// Design direction: a premium consulting document, not a dashboard dump. Wide
+// margins, generous leading, and a light ground so the page reads as printed
+// paper rather than a screenshot of the app's dark canvas. Prose carries the
+// report; the table, stat strip and figures appear only where they earn space.
+//
 // Imported dynamically from the reports modal so react-pdf stays out of the
 // initial bundle — it's only pulled in when a user actually exports.
 import {
   pdf, Document, Page, View, Text, Image, StyleSheet,
 } from '@react-pdf/renderer';
+import type { Stat, TableRow } from '@/lib/report-tables';
 
-export type ReportBlockImage = { title: string; image: string };
+export type ReportFigure = { title: string; image: string };
+export type ReportPdfSection = { title: string; body: string };
+
+export type ReportPdfInput = {
+  title: string;
+  scopeLabel: string;
+  periodLabel: string;
+  generatedAt: string;
+  sections: ReportPdfSection[];
+  stats?: Stat[];
+  financialRows?: TableRow[];
+  figures?: ReportFigure[];
+};
+
+// One scale, so spacing stays proportional rather than ad hoc.
+const INK = '#18181b';
+const BODY = '#3f3f46';
+const MUTED = '#8a8a94';
+const HAIRLINE = '#e7e7ea';
 
 const styles = StyleSheet.create({
   page: {
-    backgroundColor: '#09090b',
-    paddingTop: 48,
-    paddingHorizontal: 40,
-    paddingBottom: 56,
+    backgroundColor: '#ffffff',
+    // ~24mm sides: the single biggest contributor to a document feeling airy.
+    paddingTop: 62,
+    paddingHorizontal: 68,
+    paddingBottom: 76,
+    fontFamily: 'Helvetica',
+    color: BODY,
   },
+
   brand: {
-    fontSize: 10,
-    letterSpacing: 2,
-    color: '#a1a1aa',
-    marginBottom: 6,
+    fontSize: 7.5,
+    letterSpacing: 3,
+    color: MUTED,
+    fontFamily: 'Helvetica-Bold',
   },
   title: {
-    fontSize: 20,
-    color: '#fafafa',
-    fontWeight: 700,
+    fontSize: 23,
+    lineHeight: 1.25,
+    color: INK,
+    fontFamily: 'Helvetica-Bold',
+    marginTop: 18,
   },
-  subtitle: {
+  meta: {
+    fontSize: 9.5,
+    lineHeight: 1.5,
+    color: MUTED,
+    marginTop: 10,
+  },
+  headerRule: {
+    marginTop: 30,
+    borderBottomWidth: 0.75,
+    borderBottomColor: HAIRLINE,
+  },
+
+  statStrip: {
+    flexDirection: 'row',
+    marginTop: 30,
+  },
+  stat: {
+    flexGrow: 1,
+    flexBasis: 0,
+    paddingRight: 16,
+  },
+  statLabel: {
+    fontSize: 7.5,
+    letterSpacing: 1.1,
+    textTransform: 'uppercase',
+    color: MUTED,
+  },
+  statValue: {
+    fontSize: 13,
+    color: INK,
+    fontFamily: 'Helvetica-Bold',
+    marginTop: 7,
+  },
+
+  section: {
+    marginTop: 34,
+  },
+  sectionTitle: {
+    fontSize: 8.5,
+    letterSpacing: 1.6,
+    textTransform: 'uppercase',
+    color: MUTED,
+    fontFamily: 'Helvetica-Bold',
+    marginBottom: 12,
+  },
+  paragraph: {
+    fontSize: 10.5,
+    // Generous leading is what makes a dense paragraph scannable.
+    lineHeight: 1.75,
+    color: BODY,
+    textAlign: 'left',
+  },
+
+  table: {
+    marginTop: 20,
+  },
+  tableRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    paddingVertical: 9,
+    borderBottomWidth: 0.5,
+    borderBottomColor: HAIRLINE,
+  },
+  tableRowLast: {
+    borderBottomWidth: 0,
+  },
+  tableLabel: {
     fontSize: 10,
-    color: '#71717a',
-    marginTop: 6,
+    color: BODY,
+    flexShrink: 1,
+    paddingRight: 16,
   },
-  rule: {
-    marginTop: 16,
-    marginBottom: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#27272a',
+  tableValue: {
+    fontSize: 10,
+    color: INK,
+    fontFamily: 'Helvetica-Bold',
   },
-  block: {
-    marginBottom: 18,
-  },
-  blockTitle: {
-    fontSize: 9,
+  tableTotalLabel: {
+    fontSize: 8,
     letterSpacing: 1,
     textTransform: 'uppercase',
-    color: '#71717a',
-    marginBottom: 6,
+    color: MUTED,
   },
-  image: {
+
+  figure: {
+    marginTop: 26,
+  },
+  figureCaption: {
+    fontSize: 7.5,
+    letterSpacing: 1.1,
+    textTransform: 'uppercase',
+    color: MUTED,
+    marginBottom: 9,
+  },
+  figureImage: {
     width: '100%',
-    borderRadius: 8,
+    borderRadius: 6,
   },
+
   footer: {
     position: 'absolute',
-    bottom: 28,
-    left: 40,
-    right: 40,
-    fontSize: 8,
-    color: '#52525b',
+    bottom: 38,
+    left: 68,
+    right: 68,
+    fontSize: 7.5,
+    letterSpacing: 0.6,
+    color: MUTED,
     textAlign: 'center',
   },
 });
 
-export async function buildReportPdf(opts: {
-  title: string;
-  subtitle: string;
-  generatedAt: string;
-  blocks: ReportBlockImage[];
-}): Promise<Blob> {
+export async function buildReportPdf(input: ReportPdfInput): Promise<Blob> {
+  const stats = input.stats ?? [];
+  const rows = input.financialRows ?? [];
+  const figures = input.figures ?? [];
+
   const doc = (
-    <Document title={opts.title}>
+    <Document title={input.title}>
       <Page size="A4" style={styles.page}>
         <Text style={styles.brand}>CODEX</Text>
-        <Text style={styles.title}>{opts.title}</Text>
-        <Text style={styles.subtitle}>
-          {opts.subtitle} · generated {opts.generatedAt}
+        <Text style={styles.title}>{input.title}</Text>
+        <Text style={styles.meta}>
+          {input.scopeLabel} · {input.periodLabel} · {input.generatedAt}
         </Text>
-        <View style={styles.rule} />
+        <View style={styles.headerRule} />
 
-        {opts.blocks.map((b, i) => (
-          <View key={i} style={styles.block} wrap={false}>
-            <Text style={styles.blockTitle}>{b.title}</Text>
-            <Image src={b.image} style={styles.image} />
+        {stats.length > 0 && (
+          <View style={styles.statStrip} wrap={false}>
+            {stats.map((s, i) => (
+              <View key={i} style={styles.stat}>
+                <Text style={styles.statLabel}>{s.label}</Text>
+                <Text style={styles.statValue}>{s.value}</Text>
+              </View>
+            ))}
+          </View>
+        )}
+
+        {input.sections.map((section, i) => (
+          // minPresenceAhead keeps a heading from stranding at a page foot.
+          <View key={i} style={styles.section} minPresenceAhead={72}>
+            <Text style={styles.sectionTitle}>{section.title}</Text>
+            <Text style={styles.paragraph}>{section.body}</Text>
+
+            {section.title === 'Financials' && rows.length > 0 && (
+              <View style={styles.table}>
+                {rows.map((row, r) => {
+                  const isTotal = r === rows.length - 1 && row.label === 'Total spend';
+                  return (
+                    <View
+                      key={r}
+                      style={
+                        r === rows.length - 1
+                          ? [styles.tableRow, styles.tableRowLast]
+                          : styles.tableRow
+                      }
+                      wrap={false}
+                    >
+                      <Text style={isTotal ? styles.tableTotalLabel : styles.tableLabel}>
+                        {row.label}
+                      </Text>
+                      <Text style={styles.tableValue}>{row.value}</Text>
+                    </View>
+                  );
+                })}
+              </View>
+            )}
+          </View>
+        ))}
+
+        {figures.map((figure, i) => (
+          <View key={i} style={styles.figure} wrap={false}>
+            <Text style={styles.figureCaption}>{figure.title}</Text>
+            <Image src={figure.image} style={styles.figureImage} />
           </View>
         ))}
 
         <Text
           style={styles.footer}
           render={({ pageNumber, totalPages }) =>
-            `Generated by Codex · page ${pageNumber} of ${totalPages}`
+            `${input.scopeLabel} · page ${pageNumber} of ${totalPages}`
           }
           fixed
         />
