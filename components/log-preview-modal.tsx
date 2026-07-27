@@ -18,6 +18,9 @@ export function LogPreviewModal({ log, onClose, allLogs }: {
   allLogs: Log[];
 }) {
   const [showAttachment, setShowAttachment] = useState(false);
+  // Pasted-in file contents (a .txt upload stores up to 4000 chars here) would
+  // otherwise bury the extracted data and trust actions under a wall of text.
+  const [rawExpanded, setRawExpanded] = useState(false);
   // Optimistic exclude state so the button flips the instant it's clicked,
   // before the Convex round-trip lands (spec §8 trust action must feel direct).
   const [pendingExcluded, setPendingExcluded] = useState<boolean | null>(null);
@@ -34,7 +37,7 @@ export function LogPreviewModal({ log, onClose, allLogs }: {
     if (pendingExcluded !== null && serverExcluded === pendingExcluded) setPendingExcluded(null);
   }, [serverExcluded, pendingExcluded]);
   // Reset optimistic state when a different log is previewed.
-  useEffect(() => { setPendingExcluded(null); }, [log?.id]);
+  useEffect(() => { setPendingExcluded(null); setRawExpanded(false); }, [log?.id]);
 
   if (!log) return null;
   // Live version of the log (reactive) — mutations reflect here immediately.
@@ -43,6 +46,7 @@ export function LogPreviewModal({ log, onClose, allLogs }: {
   const cat = getCat(liveLog.category);
   const confidencePct = liveLog.ai_confidence != null ? Math.round(liveLog.ai_confidence * 100) : null;
   const allEntities = entitiesOf(liveLog);
+  const isLongRaw = log.raw_content.length > 700;
 
   async function correctCategory(newCategory: string) {
     if (!log || newCategory === liveLog.category) return;
@@ -122,19 +126,23 @@ export function LogPreviewModal({ log, onClose, allLogs }: {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/80 p-4 backdrop-blur-sm"
       onClick={onClose}
     >
       <motion.div
         initial={{ scale: 0.94, y: 16 }}
         animate={{ scale: 1, y: 0 }}
         exit={{ scale: 0.94, y: 16 }}
-        className="w-full max-w-xl rounded-xl border border-zinc-800 bg-zinc-950 shadow-2xl overflow-hidden"
+        className="flex max-h-[90vh] w-full max-w-xl flex-col rounded-xl border border-zinc-800 bg-zinc-950 shadow-2xl overflow-hidden"
         onClick={function (e) {
           e.stopPropagation();
         }}
       >
-        <div className="px-6 py-4 border-b border-zinc-800/80">
+        {/* Header and the trust actions below stay pinned; only the body
+            scrolls. A .txt upload puts its whole content in raw_content, which
+            otherwise grew the panel past the viewport and pushed the close
+            button off-screen. */}
+        <div className="shrink-0 px-6 py-4 border-b border-zinc-800/80">
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-center gap-3">
               <div
@@ -186,13 +194,27 @@ export function LogPreviewModal({ log, onClose, allLogs }: {
             </div>
           </div>
         </div>
+        <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="px-6 py-5 border-b border-zinc-800/80">
           <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-zinc-500 mb-3">
             Raw Log
           </p>
-          <p className="text-zinc-200 text-[13px] leading-relaxed whitespace-pre-wrap">
+          <p
+            className={
+              "text-zinc-200 text-[13px] leading-relaxed whitespace-pre-wrap " +
+              (isLongRaw && !rawExpanded ? "line-clamp-[12]" : "")
+            }
+          >
             {log.raw_content}
           </p>
+          {isLongRaw ? (
+            <button
+              onClick={function () { setRawExpanded(function (v) { return !v; }); }}
+              className="mt-2 text-xs font-medium text-blue-400 transition-colors hover:text-blue-300"
+            >
+              {rawExpanded ? "Show less" : "Show full text"}
+            </button>
+          ) : null}
           {log.file_url ? (
             <button
               onClick={function () { setShowAttachment(true); }}
@@ -284,9 +306,10 @@ export function LogPreviewModal({ log, onClose, allLogs }: {
             </div>
           </div>
         ) : null}
+        </div>
 
         {/* Trust actions — correct or exclude directly from the modal (spec §8). */}
-        <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4">
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-zinc-800/80 px-6 py-4">
           <label className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-zinc-500">
             Scope
             <select
