@@ -1,14 +1,15 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
-import * as RGL from 'react-grid-layout';
+import { useCallback, useMemo, useRef, useState } from 'react';
+import GridLayout from 'react-grid-layout';
+import type { Layout } from 'react-grid-layout';
 import 'react-grid-layout/css/styles.css';
 import 'react-resizable/css/styles.css';
 import { toast } from 'sonner';
 import {
   GripVertical, Pin, PinOff, EyeOff, Eye, Copy, Trash2, Pencil,
   FileText, FileX, ListPlus, Sparkles, Loader2, Repeat, Lock,
-  Hash, BarChart3, List, Clock, ScrollText, Check, Plus, X,
+  Hash, BarChart3, List, Clock, ScrollText, Check, Plus, X, LayoutGrid,
 } from 'lucide-react';
 import { logAmount, type Log } from '@/lib/dashboard-utils';
 import { getCat } from '@/lib/categories';
@@ -17,6 +18,10 @@ import { useBlockMutations } from '@/utils/convex/hooks';
 import { BlockBody } from '@/components/block-render';
 import { csrfFetch } from '@/utils/api/csrf';
 import { type Tier, tierAllows, upsellFor } from '@/lib/tiers';
+import {
+  autoArrange, canvasCols, changedCells, colWidthPx, gridWidthPx,
+  BASE_COLS, GRID_MARGIN, ROW_HEIGHT, type Placeable,
+} from '@/lib/canvas-layout';
 
 // A category is worth suggesting a block for once it has this much activity.
 const SUGGEST_THRESHOLD = 5;
@@ -33,10 +38,7 @@ const TYPE_META: { type: BlockType; label: string; Icon: typeof Hash }[] = [
   { type: 'source_log', label: 'Source', Icon: ScrollText },
 ];
 
-const ResponsiveGridLayout = RGL.WidthProvider(RGL.Responsive);
-const COLS = { lg: 12, md: 12, sm: 6, xs: 4, xxs: 2 };
-const ROW_HEIGHT = 56;
-type LayoutItem = RGL.Layout;
+type LayoutItem = Layout;
 
 export function BlockCanvas({
   blocks,
@@ -140,6 +142,34 @@ export function BlockCanvas({
     [visible],
   );
 
+  // The canvas is unbounded to the right: columns are a fixed pixel width, and
+  // the count grows to cover the furthest block plus headroom. Past the fold
+  // the wrapper scrolls sideways rather than compressing anything.
+  const [wrapWidth, setWrapWidth] = useState(0);
+  const observerRef = useRef<ResizeObserver | null>(null);
+  // A callback ref, not an effect: the wrapper only mounts once blocks have
+  // loaded, so a mount-time effect would run against a ref that is still null
+  // and never measure anything.
+  const wrapRef = useCallback((el: HTMLDivElement | null) => {
+    observerRef.current?.disconnect();
+    observerRef.current = null;
+    if (!el) return;
+    setWrapWidth(el.clientWidth);
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => setWrapWidth(el.clientWidth));
+    ro.observe(el);
+    observerRef.current = ro;
+  }, []);
+
+  const cols = useMemo(() => canvasCols(layout), [layout]);
+  // How far real content — not the headroom — reaches past the base width.
+  const beyondFold = useMemo(
+    () => Math.max(0, ...layout.map((l) => l.x + l.w)) - BASE_COLS,
+    [layout],
+  );
+  const colWidth = colWidthPx(wrapWidth);
+  const gridWidth = gridWidthPx(cols, colWidth);
+
   // Persist on gesture-end only (resolves spec §11 Q5). Batches the whole layout.
   function persist(next: LayoutItem[]) {
     const byId = new Map(visible.map((b) => [b._id, b]));
@@ -150,6 +180,31 @@ export function BlockCanvas({
       })
       .map((l) => ({ id: l.i as any, layout: { x: l.x, y: l.y, w: l.w, h: l.h } }));
     if (updates.length) m.updateLayout({ updates });
+  }
+
+  // Straighten the canvas: repack into the base width, gaps closed, sizes kept.
+  // Undo restores every cell we touched, so a stray click is cheap to reverse.
+  function arrange() {
+    const before: Placeable[] = visible.map((b) => ({ i: b._id, ...b.layout, pinned: b.pinned }));
+    const moved = changedCells(before, autoArrange(before));
+    if (!moved.length) {
+      toast('Canvas is already tidy');
+      return;
+    }
+    m.updateLayout({
+      updates: moved.map((l) => ({ id: l.i as any, layout: { x: l.x, y: l.y, w: l.w, h: l.h } })),
+    });
+    const movedIds = new Set(moved.map((l) => l.i));
+    const undo = before.filter((b) => movedIds.has(b.i));
+    toast(`Arranged ${moved.length} block${moved.length === 1 ? '' : 's'}`, {
+      action: {
+        label: 'Undo',
+        onClick: () => m.updateLayout({
+          updates: undo.map((l) => ({ id: l.i as any, layout: { x: l.x, y: l.y, w: l.w, h: l.h } })),
+        }),
+      },
+      duration: 5000,
+    });
   }
 
   async function handleDelete(block: ConvexBlockDoc) {
@@ -217,19 +272,47 @@ export function BlockCanvas({
         </div>
       ) : null}
 
-      <ResponsiveGridLayout
+      {visible.length > 1 ? (
+        <div className="mb-3 flex items-center justify-end gap-2">
+          {beyondFold > 0 ? (
+            <span className="text-[11px] text-zinc-600">
+              Canvas extends {beyondFold} column{beyondFold === 1 ? '' : 's'} past the fold — scroll right
+            </span>
+          ) : null}
+          <button
+            type="button"
+            onClick={arrange}
+            title="Pack every block into a tidy grid — sizes kept, pinned blocks left alone"
+            className="flex items-center gap-1.5 rounded-full border border-zinc-800 bg-zinc-950/60 px-3 py-1 text-[11px] font-medium text-zinc-400 transition-colors hover:border-zinc-700 hover:text-zinc-100"
+          >
+            <LayoutGrid size={12} /> Auto-arrange
+          </button>
+        </div>
+      ) : null}
+
+      <div ref={wrapRef} className="overflow-x-auto overflow-y-hidden">
+      {wrapWidth > 0 ? (
+      <GridLayout
         className="layout"
-        layouts={{ lg: layout, md: layout, sm: layout, xs: layout, xxs: layout }}
-        cols={COLS}
+        layout={layout}
+        cols={cols}
+        width={gridWidth}
+        // react-grid-layout uses `width` for arithmetic only — it never sizes
+        // its own container. Without this the headroom columns exist in the
+        // maths but there is nothing to scroll into and nowhere to drop.
+        style={{ width: gridWidth }}
         rowHeight={ROW_HEIGHT}
-        margin={[16, 16]}
+        margin={[GRID_MARGIN, GRID_MARGIN]}
         draggableHandle=".block-drag-handle"
         draggableCancel=".block-no-drag"
         onDragStart={() => { draggingRef.current = true; }}
         onResizeStart={() => { draggingRef.current = true; }}
         onDragStop={(l: LayoutItem[]) => { persist(l); draggingRef.current = false; }}
         onResizeStop={(l: LayoutItem[]) => { persist(l); draggingRef.current = false; }}
-        compactType="vertical"
+        // Free placement: a block stays where it was dropped, however far out
+        // that is. Compaction would drag everything back to the top-left and
+        // make the extra columns pointless. Arrange is the deliberate tidy-up.
+        compactType={null}
       >
         {visible.map((block) => (
           <div key={block._id} className="group relative overflow-hidden">
@@ -329,7 +412,9 @@ export function BlockCanvas({
             </div>
           </div>
         ))}
-      </ResponsiveGridLayout>
+      </GridLayout>
+      ) : null}
+      </div>
     </div>
   );
 }
