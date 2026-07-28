@@ -211,10 +211,14 @@ function financials(facts: BriefFacts, ctx: BriefContext): string {
 
   if (facts.spend.length) {
     const top = facts.spendByCategory[0];
-    parts.push(
-      `Spend totalled ${withComparison(facts.spend, cmp?.spend)}` +
-        (top ? `, led by ${top.category}.` : "."),
-    );
+    // A share, not just a leader. "Led by Finance" is true of almost every
+    // month; "Finance took 64% of it" is the sentence with a decision in it.
+    const lead = facts.concentration
+      ? `, ${facts.concentration.share}% of it ${facts.concentration.category}.`
+      : top
+        ? `, led by ${top.category}.`
+        : ".";
+    parts.push(`Spend totalled ${withComparison(facts.spend, cmp?.spend)}${lead}`);
   }
   if (facts.income.length) {
     parts.push(`Income totalled ${withComparison(facts.income, cmp?.income)}.`);
@@ -258,15 +262,27 @@ function decisions(facts: BriefFacts): string {
   const count = Math.min(facts.blockedItems.length, MAX_DECISIONS);
   if (count === 0) return "";
   const overflow = facts.blockedItems.length - count;
-  return sentenceCase(
-    `${plural(count, "item")} ${count === 1 ? "is" : "are"} held up pending a decision` +
-      (overflow > 0 ? `, of ${countWord(facts.blockedItems.length)} outstanding.` : "."),
+  const oldest = facts.blockedAging[0];
+  // The age is the argument. "Two items are blocked" is a status; "the oldest
+  // has been waiting 21 days" is why the reader should act today.
+  const age = oldest && oldest.days >= 2
+    ? ` The oldest has been waiting ${oldest.days} days.`
+    : "";
+  return (
+    sentenceCase(
+      `${plural(count, "item")} ${count === 1 ? "is" : "are"} held up pending a decision` +
+        (overflow > 0 ? `, of ${countWord(facts.blockedItems.length)} outstanding.` : "."),
+    ) + age
   );
 }
 
-/** The asks themselves, verbatim from the user's own entries. */
+/** The asks themselves, verbatim from the user's own entries, with their age. */
 export function decisionItems(facts: BriefFacts): string[] {
-  return facts.blockedItems.slice(0, MAX_DECISIONS).map(sentenceCase);
+  const ages = new Map(facts.blockedAging.map((a) => [a.item, a.days]));
+  return facts.blockedItems.slice(0, MAX_DECISIONS).map((item) => {
+    const days = ages.get(item);
+    return sentenceCase(item) + (days !== undefined && days >= 2 ? ` — open ${days} days` : "");
+  });
 }
 
 /** Factual prose for one section, with no model involvement. */
@@ -299,9 +315,89 @@ export const BRIEF_STYLE_RULES = [
   "Every figure you state must appear verbatim in the facts. If a fact is absent, omit the claim.",
   "No preamble, no sign-off, no headings, no bullet points, no markdown, no questions to the reader.",
   'Never write "it is worth noting", "overall", "in summary", "I hope this helps" or similar filler.',
-  "Two to four sentences per section. Prefer the shorter version whenever it carries the same information.",
   "Third person, past tense for what happened, present tense for what is outstanding.",
+  // The counting instinct is what made this shallow. Restating the numbers the
+  // stat strip already prints costs a sentence and adds nothing; naming the
+  // specific thing and what follows from it is the whole job.
+  "Say what happened and what it means, not how many things happened. Counts already appear in the summary strip; a sentence that only restates one is wasted.",
+  "Name specifics from `notable` — the actual work, client, or amount — rather than describing them in the abstract. Refer to them in your own words; do not quote the entries verbatim.",
+  "Where the facts support it, connect a cause to its consequence: what a blocker holds up, what a completion unblocks, what a change in spending reflects.",
+  "Two to four sentences per section. Prefer the shorter version whenever it carries the same information — but never drop a specific in order to be shorter.",
+  // Loosening the leash for substance let comma splices in. Substance and
+  // grammar are not a trade-off; the rule just has to be stated.
+  "Every sentence must be a complete sentence ending in a full stop. Never join two independent clauses with a comma.",
+  // Money written the model's own way is right and wrong at once: "$8000" in
+  // prose beside "USD 8,000" in the stat strip reads as two different numbers.
+  'State every figure exactly as it appears in the `figures` list — with its currency code, thousands separators or percent sign. Never use a currency symbol, never write a bare figure like "8000", and never write a percentage without its % sign.',
+  // First attempt at this rule said "one figure at most" and the summary
+  // collapsed to a single line. What it must not repeat is the *breakdown*,
+  // not the substance.
+  // The document goes *to* the reader; naming them in the third person inside
+  // it is the tell of prose written about a report rather than as one.
+  'Never refer to "the reader", "the client" in the abstract, or to the report itself. Name what is needed and who from.',
+  "The executive summary covers three things and no more: what was achieved, one headline money figure, and what is needed from the reader. It must not repeat the category breakdown or the per-line amounts — those belong to Financials, and a one-page report cannot afford them twice.",
 ].join(" ");
+
+/** Every monetary figure the brief may state, already formatted. */
+function moneyStrings(facts: BriefFacts): string[] {
+  const out: string[] = [];
+  if (facts.spend.length) out.push(`spend ${formatTotals(facts.spend)}`);
+  if (facts.income.length) out.push(`income ${formatTotals(facts.income)}`);
+  if (facts.net.length) out.push(`net ${formatTotals(facts.net)}`);
+  for (const row of facts.spendByCategory) {
+    out.push(`${row.category} ${row.totals.map((t) => formatAmount(t.amount, t.currency)).join(" and ")}`);
+  }
+  // Pre-rendered with its unit. Handed the bare number, the model wrote "a
+  // share of 74", which is not a quantity of anything.
+  if (facts.concentration) {
+    out.push(`${facts.concentration.share}% of spend went to ${facts.concentration.category}`);
+  }
+  for (const a of facts.blockedAging) out.push(`${a.item} blocked ${a.days} days`);
+  return out;
+}
+
+/** The line that separates one section from the next in the model's reply. */
+const SECTION_MARKER = /^\s*###\s*([a-z_]+)\s*$/;
+
+/**
+ * Parses the model's reply into sections.
+ *
+ * Deliberately not JSON. Asking a model for prose inside JSON means asking it
+ * to escape its own writing, and it routinely doesn't: a raw line break or an
+ * unquoted value made JSON.parse reject the whole document, which discarded
+ * every section's narration at once and dropped the report to its template
+ * fallback without a word. A marker line has no escaping rules to get wrong,
+ * and a malformed section can only cost that section.
+ */
+export function parseSectionResponse(
+  text: string,
+  ids: SectionId[],
+): Partial<Record<SectionId, string>> {
+  const valid = new Set<string>(ids);
+  const out: Partial<Record<SectionId, string>> = {};
+  let current: SectionId | null = null;
+  let buffer: string[] = [];
+
+  const flush = () => {
+    if (current && buffer.length) {
+      const body = buffer.join("\n").trim();
+      if (body) out[current] = body;
+    }
+    buffer = [];
+  };
+
+  for (const line of text.split(/\r?\n/)) {
+    const marker = line.match(SECTION_MARKER);
+    if (marker && valid.has(marker[1])) {
+      flush();
+      current = marker[1] as SectionId;
+      continue;
+    }
+    if (current) buffer.push(line);
+  }
+  flush();
+  return out;
+}
 
 export function buildSectionPrompt(
   ids: SectionId[],
@@ -311,12 +407,20 @@ export function buildSectionPrompt(
   return {
     system: [
       BRIEF_STYLE_RULES,
-      `Return ONLY a JSON object whose keys are exactly: ${ids.join(", ")}.`,
-      "Each value is the section's prose as a single plain string.",
+      `Write these sections, in this order: ${ids.join(", ")}.`,
+      "Begin each one with its identifier on its own line, prefixed by ###, then that section's prose on the lines below it.",
+      "For example:\n### executive_summary\nThe prose for that section.\n\n### progress\nThe prose for that section.",
+      "Output nothing else — no JSON, no headings of your own, no commentary.",
     ].join(" "),
     user: JSON.stringify({
       scope: ctx.scopeLabel,
       period: ctx.periodLabel,
+      // The prior window's figures, so the model can write about direction of
+      // travel rather than a standing total.
+      comparison: ctx.comparison ?? null,
+      // Every figure pre-rendered with its unit, so the model copies a string
+      // rather than formatting a number and losing the % or the currency.
+      figures: moneyStrings(facts),
       facts,
     }),
   };

@@ -106,7 +106,8 @@ describe('report pipeline', () => {
 
     // The blocker becomes an ask, listed verbatim rather than buried in prose.
     const decisions = brief.sections.find((s) => s.title === 'Needs Your Decision')!;
-    expect(decisions.items).toContain('Printer contract');
+    expect(decisions.items?.[0]).toMatch(/^Printer contract/);
+    expect(decisions.items?.[0]).toMatch(/open \d+ days$/);
     expect(decisions.source).toBe('facts');
   });
 

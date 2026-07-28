@@ -1,13 +1,13 @@
 import { createClient } from '@/utils/supabase/server';
 import { NextRequest, NextResponse } from 'next/server';
 import { assertSameOrigin, getClientIp, rateLimit, requireCsrf, toErrorResponse } from '@/utils/api/guards';
-import { callGroq, extractJson } from '@/utils/api/groq';
+import { callGroq } from '@/utils/api/groq';
 import { convexForUser } from '@/utils/convex/serverClient';
 import { api } from '@/convex/_generated/api';
 import { parseConvexId, DEFAULT_SETTINGS } from '@/utils/api/validation';
 import { convexLogToLog, type ConvexLogDoc } from '@/utils/convex/adapters';
 import { buildBriefFacts, activeSections, compareFacts } from '@/lib/report-brief';
-import { buildSectionPrompt } from '@/lib/report-narrative';
+import { buildSectionPrompt, parseSectionResponse } from '@/lib/report-narrative';
 import { assembleBrief } from '@/lib/report-assemble';
 import { BUSINESS_SCOPE_LABEL } from '@/lib/dashboard-utils';
 import type { SectionId } from '@/lib/report-brief';
@@ -95,7 +95,7 @@ export async function POST(request: NextRequest) {
         { role: 'system', content: system },
         { role: 'user', content: payload },
       ]);
-      const parsed = extractJson(raw);
+      const parsed = parseSectionResponse(raw, ids);
       if (parsed && typeof parsed === 'object') {
         aiSections = {};
         for (const id of ids) {

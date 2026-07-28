@@ -72,6 +72,15 @@ export const entityValidator = v.object({
   tags: v.optional(v.array(v.string())),
 });
 
+// One section of a report draft, as edited.
+export const reportSectionValidator = v.object({
+  id: v.string(),
+  title: v.string(),
+  body: v.string(),
+  items: v.optional(v.array(v.string())),
+  source: v.optional(v.string()),
+});
+
 export const blockType = v.union(
   v.literal('metric'),
   v.literal('chart'),
@@ -194,6 +203,34 @@ export default defineSchema({
     storageId: v.id('_storage'),
     createdAt: v.number(),
   }).index('by_user', ['userId']),
+
+  // A report draft in progress.
+  //
+  // Generating produces a first draft; the judgement in a consultant's report
+  // is the user's, and they add it by editing. That editing has to survive
+  // closing the dialog, or the feature is a preview with extra steps.
+  //
+  // One draft per (scope, period): those are exactly the controls that choose
+  // what a report covers, so a draft belongs to the combination it was written
+  // against rather than to the user globally.
+  reportDrafts: defineTable({
+    userId: v.string(),
+    projectId: v.optional(v.union(v.id('projects'), v.null())),
+    range: v.number(),
+    title: v.string(),
+    /** The sections as edited — what will be exported. */
+    sections: v.array(reportSectionValidator),
+    /** The sections as generated, so Reset still works in a later session. */
+    generated: v.array(reportSectionValidator),
+    // The brief's computed facts and prior-period deltas, carried so the stat
+    // strip and chart can be rendered from the draft alone. Stored loosely on
+    // purpose: this is our own serialised BriefFacts, and mirroring that type
+    // as a validator would mean editing two places every time a fact is added.
+    // It is only ever read back to render this user's own PDF.
+    facts: v.any(),
+    comparison: v.optional(v.any()),
+    updatedAt: v.number(),
+  }).index('by_user_scope', ['userId', 'projectId', 'range']),
 
   // Cached exchange rates. Reference data, not user data: a rate for a pair on
   // a date is the same for everyone, so one fetch serves every user and a

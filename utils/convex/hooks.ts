@@ -66,6 +66,23 @@ export function useLogSearch(
   };
 }
 
+/**
+ * The persisted report draft for one scope and period, with its writers.
+ *
+ * `loading` is what stops the editor from flashing a freshly generated draft
+ * over a saved one — until the query has answered, the caller doesn't know
+ * whether there is a draft to restore.
+ */
+export function useReportDraft(projectId: string | null, range: number) {
+  const draft = useConvexQuery(api.reportDrafts.get, {
+    projectId: (projectId ?? null) as never,
+    range,
+  });
+  const save = useConvexMutation(api.reportDrafts.save);
+  const discard = useConvexMutation(api.reportDrafts.remove);
+  return { draft: draft ?? null, loading: draft === undefined, save, discard };
+}
+
 // Reactive project list. `loading` matters here: the composer must not fall back
 // to business-wide scope just because projects haven't arrived yet.
 export function useProjects(): { projects: Project[]; loading: boolean } {

@@ -35,6 +35,47 @@ export async function callGroq(messages: Message[], model: GroqModel = 'llama-3.
   return content;
 }
 
+/**
+ * Escapes raw control characters that appear inside JSON string literals.
+ *
+ * Models routinely emit a literal newline inside a quoted string. That is
+ * invalid JSON, and JSON.parse rejects the whole document over it — so one
+ * stray line break in one section discarded an entire report's narration and
+ * silently dropped it to the deterministic fallback. Tracking string state is
+ * enough to fix it without touching structure: only characters inside a string
+ * are escaped, so nothing about the shape of the JSON can change.
+ */
+function escapeControlChars(json: string): string {
+  let out = '';
+  let inString = false;
+  let escaped = false;
+  for (const ch of json) {
+    if (escaped) {
+      out += ch;
+      escaped = false;
+      continue;
+    }
+    if (ch === '\\' && inString) {
+      out += ch;
+      escaped = true;
+      continue;
+    }
+    if (ch === '"') {
+      inString = !inString;
+      out += ch;
+      continue;
+    }
+    const code = ch.charCodeAt(0);
+    if (inString && code < 0x20) {
+      out += ch === '\n' ? '\\n' : ch === '\r' ? '\\r' : ch === '\t' ? '\\t'
+        : '\\u' + code.toString(16).padStart(4, '0');
+      continue;
+    }
+    out += ch;
+  }
+  return out;
+}
+
 export function extractJson(text: string) {
   let cleaned = text.trim();
   if (cleaned.startsWith('```')) {
@@ -42,5 +83,5 @@ export function extractJson(text: string) {
     const last = cleaned.lastIndexOf('```');
     if (last !== -1) cleaned = cleaned.slice(0, last).trim();
   }
-  return JSON.parse(cleaned);
+  return JSON.parse(escapeControlChars(cleaned));
 }

@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from "react";
-import { FileText, Sparkles, ExternalLink, Trash2, RotateCcw, AlertTriangle } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { FileText, Sparkles, ExternalLink, Trash2, RotateCcw, AlertTriangle, ChevronUp, ChevronDown, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -11,13 +11,14 @@ import {
   Button, Input, ScrollArea,
 } from "@/utils/client-integrations/shadcn-ui";
 import { formatTimeAgo, BUSINESS_SCOPE_LABEL } from "@/lib/dashboard-utils";
-import { useProjects } from "@/utils/convex/hooks";
+import { useProjects, useReportDraft } from "@/utils/convex/hooks";
 import { scopeLabel } from "@/components/project-scope-picker";
 import { resolveRegenerationScope } from "@/lib/report-scope";
 import { csrfFetch } from "@/utils/api/csrf";
 import { highlightStats } from "@/lib/report-tables";
 import { financialVisual } from "@/lib/report-chart";
-import type { Brief } from "@/lib/report-assemble";
+import type { Brief, BriefSection } from "@/lib/report-assemble";
+import { isBriefFacts } from "@/lib/report-brief";
 
 const PERIODS = [
   { days: 7, label: "This week" },
@@ -61,6 +62,102 @@ export function ReportsModal({ onClose, projectId = null, onRequestScope }: {
   const [stage, setStage] = useState<string | null>(null);
   // Last generated brief, kept so the prose stays on screen after export.
   const [preview, setPreview] = useState<Brief | null>(null);
+  // The editable copy. Separate from `preview` so "Reset" always has the
+  // original to go back to, and so an edit never mutates the generated facts.
+  const [draft, setDraft] = useState<BriefSection[]>([]);
+  // What the generation produced, for Reset — held separately from `preview`
+  // because a restored draft has no preview until it is regenerated.
+  const [generated, setGenerated] = useState<BriefSection[]>([]);
+  // Facts and deltas the stat strip and chart are rendered from. Carried on
+  // the draft so a restored one exports without regenerating.
+  const [factsFor, setFactsFor] = useState<{ facts: Brief["facts"]; comparison: Brief["comparison"] } | null>(null);
+
+  const { draft: saved, loading: draftLoading, save: saveDraft, discard: discardDraft } =
+    useReportDraft(projectId ?? null, days);
+
+  // Restoring: only when the editor is empty for this scope and period. An
+  // autosave round-trip must never overwrite what is being typed.
+  const restoredKey = useRef<string | null>(null);
+  useEffect(() => {
+    const key = `${projectId ?? "business"}:${days}`;
+    if (draftLoading) return;
+    if (restoredKey.current === key) return;
+    restoredKey.current = key;
+    if (saved) {
+      setDraft(saved.sections as BriefSection[]);
+      setGenerated((saved.generated ?? saved.sections) as BriefSection[]);
+      // A draft outlives the code that wrote it. Facts in a shape this build
+      // doesn't recognise cost the stat strip and the chart; the prose the
+      // user wrote is the part worth keeping and it still exports.
+      setFactsFor(
+        isBriefFacts(saved.facts)
+          ? { facts: saved.facts, comparison: saved.comparison ?? null }
+          : null,
+      );
+      if (saved.title) setTitle(saved.title);
+    } else {
+      setDraft([]);
+      setGenerated([]);
+      setFactsFor(null);
+    }
+  }, [saved, draftLoading, projectId, days]);
+
+  // Debounced autosave. Nothing about editing should require an explicit save;
+  // the failure this exists to prevent is losing work by closing a dialog.
+  const dirty = useRef(false);
+  useEffect(() => {
+    if (!dirty.current || draft.length === 0) return;
+    const timer = setTimeout(() => {
+      dirty.current = false;
+      void saveDraft({
+        projectId: (projectId ?? null) as never,
+        range: days,
+        title: title.trim() || "Progress report",
+        sections: draft.map(stripSection),
+        // Carried through untouched when unusable, so a later build that
+        // understands the shape again can still render from it.
+        facts: factsFor ? factsFor.facts : saved?.facts,
+        comparison: factsFor?.comparison ?? undefined,
+      }).catch(() => undefined);
+    }, 700);
+    return () => clearTimeout(timer);
+  }, [draft, title, factsFor, saved, projectId, days, saveDraft]);
+
+  function editDraft(next: BriefSection[]) {
+    dirty.current = true;
+    setDraft(next);
+  }
+
+  const edited =
+    draft.length !== generated.length ||
+    draft.some((s, i) => s.body !== generated[i]?.body || s.title !== generated[i]?.title);
+
+  function editSection(i: number, patch: Partial<BriefSection>) {
+    editDraft(draft.map((s, j) => (j === i ? { ...s, ...patch } : s)));
+  }
+  function removeSection(i: number) {
+    editDraft(draft.filter((_, j) => j !== i));
+  }
+  function moveSection(i: number, by: -1 | 1) {
+    const to = i + by;
+    if (to < 0 || to >= draft.length) return;
+    const next = [...draft];
+    [next[i], next[to]] = [next[to], next[i]];
+    editDraft(next);
+  }
+  function addSection() {
+    editDraft([
+      ...draft,
+      // A section of the user's own is what makes them the author rather than
+      // the data source — recommendations, context, anything the logs can't know.
+      { id: `custom-${Date.now()}` as BriefSection["id"], title: "Your note", body: "", source: "facts" },
+    ]);
+  }
+
+  /** Drops fields the draft table doesn't carry, so the validator stays strict. */
+  function stripSection(s: BriefSection) {
+    return { id: String(s.id), title: s.title, body: s.body, items: s.items, source: s.source };
+  }
 
   const pastReports = useQuery(api.reports.list) ?? [];
   const generateUploadUrl = useMutation(api.reports.generateUploadUrl);
@@ -70,6 +167,9 @@ export function ReportsModal({ onClose, projectId = null, onRequestScope }: {
   const { projects } = useProjects();
   const currentScope = scopeLabel(projectId, projects);
 
+  // Draft and export are separate steps on purpose. A generated report is a
+  // first draft — the facts are the app's, the judgement is the user's — and
+  // there was previously no moment between the two in which to add any.
   async function generate() {
     setBusy(true);
     try {
@@ -83,24 +183,56 @@ export function ReportsModal({ onClose, projectId = null, onRequestScope }: {
       const briefData = await briefRes.json();
       if (!briefRes.ok) throw new Error(briefData.error || "Could not write the brief");
       const brief: Brief = briefData.brief;
+      const fresh = brief.sections.map((s) => ({ ...s }));
       setPreview(brief);
+      setDraft(fresh);
+      setGenerated(fresh);
+      setFactsFor({ facts: brief.facts, comparison: brief.comparison });
+      // Written immediately, not on the next edit: a draft that only persists
+      // once you touch it still loses the generation itself.
+      dirty.current = false;
+      await saveDraft({
+        projectId: (projectId ?? null) as never,
+        range: days,
+        title: title.trim() || "Progress report",
+        sections: fresh.map(stripSection),
+        generated: fresh.map(stripSection),
+        facts: brief.facts,
+        comparison: brief.comparison ?? undefined,
+      }).catch(() => undefined);
+      toast.success("Draft saved — edit it, or download as it stands");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not write the brief");
+    } finally {
+      setBusy(false);
+      setStage(null);
+    }
+  }
 
+  async function exportPdf() {
+    if (draft.length === 0) return;
+    setBusy(true);
+    try {
       setStage("Rendering PDF…");
       const { buildReportPdf } = await import("@/utils/report-pdf");
       const blob = await buildReportPdf({
-        title: brief.title,
+        title: title.trim() || "Progress report",
         // The PDF leaves the app, so it has to say which scope it covers on its
         // own — a project report and a company-wide one look identical otherwise.
-        scopeLabel: brief.scopeLabel,
-        periodLabel: brief.periodLabel,
+        scopeLabel: currentScope,
+        periodLabel: PERIODS.find((p) => p.days === days)?.label ?? `Last ${days} days`,
         // A date, not a timestamp — seconds are noise on a client document.
-        generatedAt: new Date(brief.generatedAt).toLocaleDateString(undefined, {
+        generatedAt: new Date().toLocaleDateString(undefined, {
           day: "numeric", month: "long", year: "numeric",
         }),
-        sections: brief.sections.map((s) => ({ title: s.title, body: s.body, items: s.items })),
-        stats: highlightStats(brief.facts, brief.comparison),
+        // The edited draft, not what came back from the server.
+        sections: draft
+          .filter((s) => s.body.trim() || s.items?.length)
+          .map((s) => ({ title: s.title, body: s.body, items: s.items })),
+        // Omitted rather than guessed when the stored facts are unusable.
+        stats: factsFor ? highlightStats(factsFor.facts, factsFor.comparison) : undefined,
         // Chart or table, drawn natively — never a screenshot of the canvas.
-        financials: financialVisual(brief.facts),
+        financials: factsFor ? financialVisual(factsFor.facts) : undefined,
       });
 
       const uploadUrl = await generateUploadUrl();
@@ -125,7 +257,7 @@ export function ReportsModal({ onClose, projectId = null, onRequestScope }: {
       const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
       const scopeSlug = projectId ? `${slug(currentScope)}-` : "";
       download(blob, `${scopeSlug}${slug(title.trim() || "report")}-${days}d.pdf`);
-      toast.success("Report generated");
+      toast.success("Report downloaded");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Report generation failed");
     } finally {
@@ -218,7 +350,15 @@ export function ReportsModal({ onClose, projectId = null, onRequestScope }: {
               </div>
 
               <Button
-                onClick={() => generate()}
+                onClick={() => {
+                  if (
+                    edited &&
+                    !window.confirm(
+                      "Regenerating replaces your edits with a fresh draft. Continue?",
+                    )
+                  ) return;
+                  void generate();
+                }}
                 disabled={busy}
                 variant="outline"
                 className="w-full gap-2 border-violet-500/30 bg-violet-500/10 text-[13px] font-medium text-violet-300 hover:bg-violet-500/20 hover:text-violet-200 disabled:opacity-40"
@@ -230,28 +370,102 @@ export function ReportsModal({ onClose, projectId = null, onRequestScope }: {
                   </>
                 ) : (
                   <>
-                    <Sparkles size={13} /> Generate report
+                    {/* Keys off the draft, not `preview`: a draft restored from a
+                        previous session has no preview, and the button read
+                        "Generate draft" over work already in progress. */}
+                    <Sparkles size={13} /> {draft.length > 0 ? "Regenerate draft" : "Generate draft"}
                   </>
                 )}
               </Button>
             </div>
 
-            {preview ? (
-              <div className="space-y-4 rounded-lg border border-zinc-800/80 bg-zinc-900/40 p-4">
+            {draft.length > 0 ? (
+              <div className="space-y-3 rounded-lg border border-zinc-800/80 bg-zinc-900/40 p-4">
                 <div className="flex items-baseline justify-between">
-                  <SectionLabel>Brief</SectionLabel>
+                  <SectionLabel>Draft</SectionLabel>
                   <span className="font-mono text-[10.5px] text-zinc-600">
-                    {preview.scopeLabel} · {preview.periodLabel}
+                    {currentScope} · {PERIODS.find((p) => p.days === days)?.label ?? `${days}d`}
                   </span>
                 </div>
-                {preview.sections.map((s) => (
-                  <div key={s.id} className="space-y-1.5">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-zinc-500">
-                      {s.title}
-                    </p>
-                    <p className="text-[12.5px] leading-relaxed text-zinc-300">{s.body}</p>
+                <p className="text-[11px] leading-relaxed text-zinc-600">
+                  Edit anything below before you download. Changes save as you type —
+                  closing this dialog keeps them.
+                </p>
+                {!factsFor ? (
+                  <p className="rounded-md border border-amber-500/25 bg-amber-500/5 px-2.5 py-1.5 text-[11px] leading-relaxed text-amber-300/80">
+                    The figures saved with this draft can&apos;t be read by this version, so
+                    the summary strip and chart are left out. Your text is intact —
+                    regenerate to bring the figures back.
+                  </p>
+                ) : null}
+
+                {draft.map((s, i) => (
+                  <div
+                    key={s.id}
+                    className="group/section space-y-1.5 rounded-lg border border-transparent p-2 transition-colors hover:border-zinc-800 hover:bg-zinc-900/40"
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        value={s.title}
+                        onChange={(e) => editSection(i, { title: e.target.value })}
+                        aria-label={`Section ${i + 1} heading`}
+                        className="min-w-0 flex-1 rounded border border-transparent bg-transparent px-1 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-zinc-400 outline-none transition-colors hover:border-zinc-800 focus:border-zinc-700 focus:bg-zinc-950"
+                      />
+                      <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover/section:opacity-100 focus-within:opacity-100">
+                        <MiniBtn label="Move up" onClick={() => moveSection(i, -1)} disabled={i === 0}>
+                          <ChevronUp size={11} />
+                        </MiniBtn>
+                        <MiniBtn label="Move down" onClick={() => moveSection(i, 1)} disabled={i === draft.length - 1}>
+                          <ChevronDown size={11} />
+                        </MiniBtn>
+                        <MiniBtn label="Remove section" danger onClick={() => removeSection(i)}>
+                          <Trash2 size={11} />
+                        </MiniBtn>
+                      </div>
+                    </div>
+                    <textarea
+                      value={s.body}
+                      onChange={(e) => editSection(i, { body: e.target.value })}
+                      aria-label={`${s.title} text`}
+                      rows={Math.max(2, Math.ceil(s.body.length / 78))}
+                      placeholder="Write this section…"
+                      className="w-full resize-y rounded border border-transparent bg-transparent px-1 py-0.5 text-[12.5px] leading-relaxed text-zinc-300 outline-none transition-colors hover:border-zinc-800 focus:border-zinc-700 focus:bg-zinc-950"
+                    />
+                    {s.items?.length ? (
+                      <ul className="space-y-0.5 pl-1">
+                        {s.items.map((item, j) => (
+                          <li key={j} className="flex gap-1.5 text-[12px] text-zinc-400">
+                            <span className="text-zinc-600">—</span>
+                            <span>{item}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
                   </div>
                 ))}
+
+                <div className="flex items-center justify-between border-t border-zinc-800/80 pt-3">
+                  <button
+                    type="button"
+                    onClick={addSection}
+                    className="flex items-center gap-1 text-[11px] font-medium text-zinc-500 transition-colors hover:text-zinc-200"
+                  >
+                    <Plus size={11} /> Add a section
+                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => editDraft(generated.map((x) => ({ ...x })))}
+                      disabled={!edited}
+                      className="text-[11px] font-medium text-zinc-500 transition-colors hover:text-zinc-200 disabled:opacity-30"
+                    >
+                      Reset
+                    </button>
+                    <Button onClick={exportPdf} disabled={busy || draft.length === 0}>
+                      {busy ? stage ?? "Working…" : "Download PDF"}
+                    </Button>
+                  </div>
+                </div>
               </div>
             ) : null}
 
@@ -354,5 +568,32 @@ export function ReportsModal({ onClose, projectId = null, onRequestScope }: {
 
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** Small icon control for the draft editor's per-section actions. */
+function MiniBtn({ children, onClick, label, disabled, danger }: {
+  children: React.ReactNode;
+  onClick: () => void;
+  label: string;
+  disabled?: boolean;
+  danger?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={label}
+      aria-label={label}
+      className={
+        "rounded p-1 transition-colors disabled:opacity-25 " +
+        (danger
+          ? "text-zinc-600 hover:bg-red-600 hover:text-white"
+          : "text-zinc-600 hover:bg-zinc-800 hover:text-zinc-200")
+      }
+    >
+      {children}
+    </button>
   );
 }

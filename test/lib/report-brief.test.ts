@@ -7,6 +7,7 @@ import {
   sectionHasSubstance,
   compareFacts,
   changePhrase,
+  isBriefFacts,
 } from '../../lib/report-brief';
 import type { Log, LogEntity } from '../../lib/dashboard-utils';
 
@@ -264,5 +265,47 @@ describe('changePhrase', () => {
 
   it('says nothing when there is nothing to compare against', () => {
     expect(changePhrase(null)).toBeNull();
+  });
+});
+
+describe('isBriefFacts', () => {
+  const facts = buildBriefFacts([
+    log({ entities: [entity({ type: 'expense', amount: 10, currency: 'USD' })] }),
+  ]);
+
+  it('accepts what buildBriefFacts produces', () => {
+    // Round-tripped through JSON, which is how a stored draft comes back.
+    expect(isBriefFacts(JSON.parse(JSON.stringify(facts)))).toBe(true);
+  });
+
+  it('rejects a draft written before a field the export path indexes into existed', () => {
+    // The case this exists for: BriefFacts grows, a draft saved under the old
+    // shape is reopened, and highlightStats does facts.income.length on
+    // undefined. Better to lose the stat strip than the whole export.
+    const { spendByCategory, ...older } = JSON.parse(JSON.stringify(facts));
+    expect(isBriefFacts(older)).toBe(false);
+
+    const noTasks = JSON.parse(JSON.stringify(facts));
+    delete noTasks.tasks;
+    expect(isBriefFacts(noTasks)).toBe(false);
+  });
+
+  it('rejects money that is not money', () => {
+    const bad = JSON.parse(JSON.stringify(facts));
+    bad.spend = [{ currency: 'USD', amount: 'lots' }];
+    expect(isBriefFacts(bad)).toBe(false);
+  });
+
+  it('rejects anything that is not an object at all', () => {
+    for (const value of [null, undefined, 'facts', 42, []]) {
+      expect(isBriefFacts(value)).toBe(false);
+    }
+  });
+
+  it('tolerates fields it does not know about, so a newer draft still renders', () => {
+    // Forward compatibility matters as much as backward: a draft written by a
+    // build that added a fact should not be rejected by one that hasn't.
+    const newer = { ...JSON.parse(JSON.stringify(facts)), somethingAddedLater: [1, 2] };
+    expect(isBriefFacts(newer)).toBe(true);
   });
 });

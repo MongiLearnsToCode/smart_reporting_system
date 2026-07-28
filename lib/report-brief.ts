@@ -46,6 +46,25 @@ export type BriefFacts = {
   risks: string[];
   blockedItems: string[];
   openItems: string[];
+  /**
+   * How long each blocked item has been outstanding. "Blocked" is a state;
+   * "blocked for 21 days" is a problem — the number is what turns a list into
+   * something a reader has to answer.
+   */
+  blockedAging: { item: string; days: number }[];
+  /**
+   * The share of spend the largest category took. A total says how much went
+   * out; this says where it concentrated, which is the part with a decision
+   * attached to it.
+   */
+  concentration: { category: string; share: number } | null;
+  /**
+   * The few entries carrying the most signal, in the user's own words. The
+   * narrator never prints these — they go to the model as raw material so it
+   * can synthesise rather than recite counts, which is the difference between
+   * a brief report and a shallow one.
+   */
+  notable: { text: string; category: string; at: number }[];
 };
 
 const UNKNOWN_CURRENCY = "—";
@@ -95,6 +114,8 @@ export function buildBriefFacts(logs: Log[], defaultCurrency = "USD"): BriefFact
   const risks: string[] = [];
   const blockedItems: string[] = [];
   const openItems: string[] = [];
+  const blockedSince = new Map<string, number>();
+  const notable: { text: string; category: string; at: number; weight: number }[] = [];
 
   for (const log of included) {
     const category = log.category || "Other";
@@ -141,18 +162,76 @@ export function buildBriefFacts(logs: Log[], defaultCurrency = "USD"): BriefFact
       }
 
       const label = cleanText(entity.task) ?? cleanText(entity.deliverable);
-      if (entity.status === "blocked") pushUnique(blockedItems, label, 8);
+      if (entity.status === "blocked") {
+        pushUnique(blockedItems, label, 8);
+        // Earliest mention, not latest: an item raised three weeks ago and
+        // repeated since has been stuck three weeks, not one day.
+        if (label) {
+          const at = new Date(log.timestamp).getTime();
+          const seen = blockedSince.get(label);
+          if (Number.isFinite(at) && (seen === undefined || at < seen)) blockedSince.set(label, at);
+        }
+      }
       if (entity.status === "open" || entity.status === "in_progress") {
         pushUnique(openItems, label, 8);
       }
       if (entity.status === "complete") pushUnique(deliverables, cleanText(entity.deliverable), 8);
       pushUnique(risks, cleanText(entity.issue_or_risk), 8);
+
+      // Rank entries by how much a reader would want them mentioned: money
+      // moved, then a blocker or risk, then urgency. The raw text goes with
+      // them so the narration has something to quote.
+      const raw = cleanText(log.raw_content, 400);
+      if (raw) {
+        const weight =
+          (amount !== null ? Math.min(Math.abs(amount) / 1000, 6) : 0) +
+          (entity.status === "blocked" ? 4 : 0) +
+          (entity.issue_or_risk ? 3 : 0) +
+          (entity.urgency === "high" ? 2 : 0) +
+          (entity.status === "complete" ? 1 : 0);
+        // One entry, not one per entity: a log holding an expense and a task
+        // is still a single thing the reader would be told about once.
+        if (weight > 0) {
+          const at = new Date(log.timestamp).getTime();
+          const existing = notable.find((n) => n.text === raw);
+          if (existing) existing.weight = Math.max(existing.weight, weight);
+          else notable.push({ text: raw, category, at, weight });
+        }
+      }
     }
   }
 
   const net = new Map<string, number>();
   for (const [currency, amount] of income) addMoney(net, currency, amount);
   for (const [currency, amount] of spend) addMoney(net, currency, -amount);
+
+  const spendRows = Array.from(spendByCategory, ([category, totals]) => ({
+    category,
+    totals: toTotals(totals),
+  })).sort((a, b) => (b.totals[0]?.amount ?? 0) - (a.totals[0]?.amount ?? 0));
+
+  // Share is only meaningful within one currency. Where a conversion is
+  // missing and totals are split across currencies, there is no honest
+  // denominator, so no claim is made.
+  let concentration: BriefFacts["concentration"] = null;
+  const spendTotals = toTotals(spend);
+  if (spendRows.length > 1 && spendTotals.length === 1 && spendTotals[0].amount > 0) {
+    const top = spendRows[0].totals.find((t) => t.currency === spendTotals[0].currency);
+    if (top) {
+      concentration = {
+        category: spendRows[0].category,
+        share: Math.round((top.amount / spendTotals[0].amount) * 100),
+      };
+    }
+  }
+
+  const now = Date.now();
+  const blockedAging = blockedItems
+    .map((item) => ({
+      item,
+      days: Math.max(0, Math.floor((now - (blockedSince.get(item) ?? now)) / 86400000)),
+    }))
+    .sort((a, b) => b.days - a.days);
 
   return {
     entryCount: included.length,
@@ -177,6 +256,12 @@ export function buildBriefFacts(logs: Log[], defaultCurrency = "USD"): BriefFact
     deliverables,
     risks,
     blockedItems,
+    blockedAging,
+    concentration,
+    notable: notable
+      .sort((a, b) => b.weight - a.weight || b.at - a.at)
+      .slice(0, 6)
+      .map(({ text, category, at }) => ({ text, category, at })),
     openItems,
   };
 }
@@ -305,4 +390,57 @@ export function changePhrase(changePct: number | null): string | null {
   if (changePct === null) return null;
   if (changePct === 0) return "level with";
   return `${changePct > 0 ? "up" : "down"} ${Math.abs(changePct)}% from`;
+}
+
+/**
+ * Structural check on facts read back from a stored draft.
+ *
+ * A draft outlives the code that wrote it. BriefFacts has grown four fields in
+ * a single day of work, so a draft saved before a deploy can be opened after
+ * one, and the export path indexes straight into these arrays —
+ * `facts.spend.map(...)`, `facts.tasks.completed` — which throws on a shape it
+ * doesn't recognise.
+ *
+ * A validator on the column would not help: Convex validates writes, so rows
+ * written under the old shape survive and then fail schema validation, which
+ * can block a deploy until they are migrated. Guarding the read is what fails
+ * safe — an unrecognised shape costs the stat strip and the chart, and the
+ * prose the user actually wrote still exports.
+ */
+export function isBriefFacts(value: unknown): value is BriefFacts {
+  if (!value || typeof value !== "object") return false;
+  const f = value as Record<string, unknown>;
+
+  const isTotals = (v: unknown) =>
+    Array.isArray(v) &&
+    v.every(
+      (t) =>
+        t && typeof t === "object" &&
+        typeof (t as MoneyTotal).currency === "string" &&
+        typeof (t as MoneyTotal).amount === "number",
+    );
+
+  if (!isTotals(f.spend) || !isTotals(f.income) || !isTotals(f.net)) return false;
+  if (
+    !Array.isArray(f.spendByCategory) ||
+    !f.spendByCategory.every(
+      (row) =>
+        row && typeof row === "object" &&
+        typeof (row as { category?: unknown }).category === "string" &&
+        isTotals((row as { totals?: unknown }).totals),
+    )
+  ) return false;
+
+  const tasks = f.tasks as Record<string, unknown> | undefined;
+  if (
+    !tasks || typeof tasks !== "object" ||
+    typeof tasks.completed !== "number" || typeof tasks.inProgress !== "number" ||
+    typeof tasks.open !== "number" || typeof tasks.blocked !== "number"
+  ) return false;
+
+  if (typeof f.entryCount !== "number") return false;
+  for (const key of ["deliverables", "blockedItems"]) {
+    if (!Array.isArray(f[key])) return false;
+  }
+  return true;
 }

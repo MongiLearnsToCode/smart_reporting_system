@@ -52,6 +52,11 @@ export function collectAllowedNumbers(facts: BriefFacts, ctx: BriefContext): num
   ];
 
   for (const c of facts.categories) allowed.push(c.count);
+  // Aging and concentration are computed facts like any other. Without them
+  // the guard rejected the deterministic narrative's own sentences — the
+  // report's last line of defence firing on the report itself.
+  for (const a of facts.blockedAging) allowed.push(a.days);
+  if (facts.concentration) allowed.push(facts.concentration.share);
   for (const group of [facts.spend, facts.income, facts.net]) {
     for (const t of group) {
       allowed.push(t.amount, Math.abs(t.amount), Math.round(Math.abs(t.amount)));
@@ -93,6 +98,38 @@ export function extractFigures(text: string): number[] {
   return figures;
 }
 
+/** Every money figure the facts state, for the formatting check below. */
+export function moneyAmounts(facts: BriefFacts): number[] {
+  const out: number[] = [];
+  for (const group of [facts.spend, facts.income, facts.net]) {
+    for (const t of group) out.push(Math.abs(t.amount));
+  }
+  for (const row of facts.spendByCategory) {
+    for (const t of row.totals) out.push(Math.abs(t.amount));
+  }
+  return out;
+}
+
+/**
+ * Catches money the model reformatted into its own house style.
+ *
+ * The figures can be right and the document still wrong: "$8000" in prose
+ * beside "USD 8,000" in the stat strip and the chart reads as two different
+ * numbers from two different systems. The guard above checks that a figure is
+ * true; this one checks it is stated the way the rest of the document states
+ * it. A section that fails falls back to the deterministic narrative, which
+ * formats money through one function.
+ */
+export function hasMisformattedMoney(text: string, amounts: number[]): boolean {
+  // A currency symbol glued to a digit is never house style here.
+  if (/[$€£¥₦₹]\s?\d/.test(text)) return true;
+  for (const match of text.matchAll(/(?<![\d.,])(\d{4,}(?:\.\d+)?)(?![\d.,])/g)) {
+    const value = Number(match[1]);
+    if (amounts.some((a) => Math.abs(a - value) < 0.005)) return true;
+  }
+  return false;
+}
+
 export function hasUnsupportedFigures(text: string, allowed: number[]): boolean {
   return extractFigures(text).some(
     (figure) => !allowed.some((ok) => Math.abs(ok - figure) < EPSILON),
@@ -114,6 +151,7 @@ export function assembleBrief(opts: {
 }): Brief {
   const { facts, ctx, aiSections } = opts;
   const allowed = collectAllowedNumbers(facts, ctx);
+  const amounts = moneyAmounts(facts);
   const maxSentences = opts.maxSentences ?? 4;
 
   const sections: BriefSection[] = activeSections(facts).map((id) => {
@@ -127,7 +165,7 @@ export function assembleBrief(opts: {
     // is that it says the uncomfortable thing in the sender's own words.
     if (id !== "decisions" && typeof candidate === "string") {
       const cleaned = tightenProse(candidate, maxSentences);
-      if (cleaned && !hasUnsupportedFigures(cleaned, allowed)) {
+      if (cleaned && !hasUnsupportedFigures(cleaned, allowed) && !hasMisformattedMoney(cleaned, amounts)) {
         return { id, title: SECTION_TITLES[id], body: cleaned, source: "ai" as const, items };
       }
     }

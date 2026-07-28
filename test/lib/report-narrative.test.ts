@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { buildBriefFacts, activeSections } from '../../lib/report-brief';
 import {
   narrateSection, joinList, plural, buildSectionPrompt, sentenceCase,
-  countWord, periodPhrase, decisionItems,
+  countWord, periodPhrase, decisionItems, parseSectionResponse,
 } from '../../lib/report-narrative';
 import { hasFiller } from '../../lib/report-prose';
 import type { Log, LogEntity } from '../../lib/dashboard-utils';
@@ -188,7 +188,9 @@ describe('narrateSection', () => {
 
   it('puts the blocker in the decisions section instead, worded as an ask', () => {
     expect(narrateSection('decisions', facts, ctx)).toContain('held up pending a decision');
-    expect(decisionItems(facts)).toEqual(['Vendor contract']);
+    // The age rides on the ask: "blocked" is a status, "open 8 days" is the
+    // argument for answering it today.
+    expect(decisionItems(facts)).toEqual(['Vendor contract — open 8 days']);
   });
 
   it('never emits filler', () => {
@@ -244,5 +246,49 @@ describe('buildSectionPrompt', () => {
     expect(parsed.scope).toBe('Acme Rebrand');
     expect(parsed.period).toBe('This week');
     expect(parsed.facts.spend).toEqual([{ currency: 'USD', amount: 100 }]);
+  });
+});
+
+describe('parseSectionResponse', () => {
+  const ids = ['executive_summary', 'progress', 'financials'] as const;
+
+  it('splits the reply on its section markers', () => {
+    const reply = [
+      '### executive_summary',
+      'Northwind completed two items.',
+      '',
+      '### progress',
+      'Guidelines signed off.',
+      'Launch deck delivered.',
+    ].join('\n');
+    expect(parseSectionResponse(reply, [...ids])).toEqual({
+      executive_summary: 'Northwind completed two items.',
+      progress: 'Guidelines signed off.\nLaunch deck delivered.',
+    });
+  });
+
+  it('survives prose that would have broken JSON', () => {
+    // The whole reason this is not JSON: a model writing prose emits raw line
+    // breaks, unescaped quotes and stray punctuation, any one of which made
+    // JSON.parse reject the entire document and discard every section at once.
+    const reply = '### progress\nHe said "it slipped" — and it did,\nover two lines.';
+    expect(parseSectionResponse(reply, [...ids]).progress)
+      .toBe('He said "it slipped" — and it did,\nover two lines.');
+  });
+
+  it('keeps the good sections when one is malformed', () => {
+    const reply = '### progress\nReal prose.\n\n### not_a_section\nJunk.\n\n### financials\nSpend was flat.';
+    const out = parseSectionResponse(reply, [...ids]);
+    expect(out.progress).toContain('Real prose.');
+    expect(out.financials).toBe('Spend was flat.');
+  });
+
+  it('ignores anything the model writes before the first marker', () => {
+    expect(parseSectionResponse('Sure, here you go:\n### progress\nDone.', [...ids]))
+      .toEqual({ progress: 'Done.' });
+  });
+
+  it('returns nothing rather than guessing when there are no markers', () => {
+    expect(parseSectionResponse('Just some prose with no markers.', [...ids])).toEqual({});
   });
 });

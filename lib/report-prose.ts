@@ -26,6 +26,14 @@ const SIGNOFF = [
  * Hedges and throat-clearing. Removed wherever a sentence starts, since the
  * model reintroduces them mid-paragraph as readily as at the top.
  */
+// Evaluative adjectives a report should not be applying to its own contents.
+// "A notable income of USD 8,000" is the same sentence as "income of
+// USD 8,000" with a judgement bolted on that the figure has to earn itself.
+const PUFFERY = [
+  /\b(?:significant|notable|substantial|considerable|impressive|remarkable|key)\s+(?=[a-z])/gi,
+  /\bachieved a (?:significant |major |key )?milestone with\s+/gi,
+];
+
 const HEDGES = [
   /\bit(?:'s| is) worth noting that\s+/gi,
   /\bit should be noted that\s+/gi,
@@ -83,6 +91,7 @@ export function stripFiller(raw: string): string {
   }
 
   for (const pattern of HEDGES) text = text.replace(pattern, "");
+  for (const pattern of PUFFERY) text = text.replace(pattern, "");
 
   text = text
     .replace(/[ \t]+/g, " ")
