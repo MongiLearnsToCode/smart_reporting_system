@@ -858,8 +858,6 @@ export default function CodexApp() {
 
       {showReports ? (
         <ReportsModal
-          blocks={blocks}
-          logs={allLogs}
           projectId={viewScope}
           onRequestScope={handleViewScopeChange}
           onClose={function () { setShowReports(false); }}

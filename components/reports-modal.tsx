@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useState } from "react";
 import { FileText, Sparkles, ExternalLink, Trash2, RotateCcw, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { useQuery, useMutation } from "convex/react";
@@ -8,17 +8,15 @@ import { api } from "@/convex/_generated/api";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
   ToggleGroup, ToggleGroupItem,
-  Button, Checkbox, Input, ScrollArea,
+  Button, Input, ScrollArea,
 } from "@/utils/client-integrations/shadcn-ui";
-import { BlockBody } from "@/components/block-render";
-import { getCat } from "@/lib/categories";
-import { formatTimeAgo, BUSINESS_SCOPE_LABEL, type Log } from "@/lib/dashboard-utils";
-import type { ConvexBlockDoc } from "@/utils/convex/adapters";
+import { formatTimeAgo, BUSINESS_SCOPE_LABEL } from "@/lib/dashboard-utils";
 import { useProjects } from "@/utils/convex/hooks";
 import { scopeLabel } from "@/components/project-scope-picker";
 import { resolveRegenerationScope } from "@/lib/report-scope";
 import { csrfFetch } from "@/utils/api/csrf";
-import { financialRows, highlightStats } from "@/lib/report-tables";
+import { highlightStats } from "@/lib/report-tables";
+import { financialVisual } from "@/lib/report-chart";
 import type { Brief } from "@/lib/report-assemble";
 
 const PERIODS = [
@@ -26,13 +24,6 @@ const PERIODS = [
   { days: 30, label: "This month" },
   { days: 90, label: "Quarter" },
 ] as const;
-
-// Offscreen capture geometry — one fixed width, height scaled from the block's
-// grid rows so an exported block roughly matches its on-canvas footprint.
-const CAPTURE_W = 600;
-function captureHeight(b: ConvexBlockDoc) {
-  return Math.min(520, Math.max(200, b.layout.h * 58));
-}
 
 function periodLabel(days: number) {
   return PERIODS.find((p) => p.days === days)?.label ?? `Last ${days} days`;
@@ -57,78 +48,32 @@ function download(blob: Blob, name: string) {
   setTimeout(() => URL.revokeObjectURL(url), 4000);
 }
 
-export function ReportsModal({ blocks, logs, onClose, projectId = null, onRequestScope }: {
-  blocks: ConvexBlockDoc[];
-  logs: Log[];
+export function ReportsModal({ onClose, projectId = null, onRequestScope }: {
   onClose: () => void;
-  /** Scope the `logs` prop was drawn from — recorded on every report. */
+  /** Scope the report covers — recorded on every report. */
   projectId?: string | null;
   /** Switches the app's view scope, so an out-of-scope report can be regenerated. */
   onRequestScope?: (projectId: string | null) => void;
 }) {
   const [days, setDays] = useState<number>(7);
   const [title, setTitle] = useState("Progress report");
-  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const [stage, setStage] = useState<string | null>(null);
   // Last generated brief, kept so the prose stays on screen after export.
   const [preview, setPreview] = useState<Brief | null>(null);
-  const touched = useRef(false);
-  const nodeRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
   const pastReports = useQuery(api.reports.list) ?? [];
   const generateUploadUrl = useMutation(api.reports.generateUploadUrl);
   const createReport = useMutation(api.reports.create);
   const removeReport = useMutation(api.reports.remove);
 
-  const liveIds = useMemo(() => new Set(blocks.map((b) => b._id)), [blocks]);
-
   const { projects } = useProjects();
   const currentScope = scopeLabel(projectId, projects);
 
-  // Figures are supporting evidence now that prose carries the report, so the
-  // default is the visual block types only, capped — a brief that opens with
-  // six screenshots isn't a brief. Stops syncing once the user picks manually.
-  useEffect(() => {
-    if (touched.current) return;
-    setSelected(
-      new Set(
-        blocks
-          .filter((b) => b.includeInReports && (b.type === "chart" || b.type === "timeline"))
-          .slice(0, 3)
-          .map((b) => b._id),
-      ),
-    );
-  }, [blocks]);
-
-  // Logs constrained to the chosen period — the capture stage renders each block
-  // against exactly what the report window covers.
-  const periodLogs = useMemo(() => {
-    const since = Date.now() - days * 86400000;
-    return logs.filter((l) => new Date(l.timestamp).getTime() >= since);
-  }, [logs, days]);
-
-  const selectedBlocks = useMemo(
-    () => blocks.filter((b) => selected.has(b._id)),
-    [blocks, selected],
-  );
-
-  function toggle(id: string) {
-    touched.current = true;
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      return next;
-    });
-  }
-
-  async function generate(ids: string[]) {
-    const chosen = blocks.filter((b) => ids.includes(b._id));
+  async function generate() {
     setBusy(true);
     try {
-      // The narrative is the report. It's built server-side from the same
-      // scoped logs the canvas shows, so figures are optional supporting
-      // evidence rather than the document itself.
+      // The narrative is the report, built server-side from the scoped logs.
       setStage("Writing the brief…");
       const briefRes = await csrfFetch("/api/reports/brief", {
         method: "POST",
@@ -140,24 +85,6 @@ export function ReportsModal({ blocks, logs, onClose, projectId = null, onReques
       const brief: Brief = briefData.brief;
       setPreview(brief);
 
-      const images: { title: string; image: string }[] = [];
-      if (chosen.length > 0) {
-        setStage("Rendering figures…");
-        // Let recharts/layout settle in the offscreen stage before rasterizing.
-        await new Promise((r) => setTimeout(r, 350));
-        const { toPng } = await import("html-to-image");
-        for (const b of chosen) {
-          const node = nodeRefs.current.get(b._id);
-          if (!node) continue;
-          const image = await toPng(node, {
-            pixelRatio: 2,
-            backgroundColor: "#09090b",
-            cacheBust: true,
-          });
-          images.push({ title: b.title, image });
-        }
-      }
-
       setStage("Rendering PDF…");
       const { buildReportPdf } = await import("@/utils/report-pdf");
       const blob = await buildReportPdf({
@@ -166,11 +93,14 @@ export function ReportsModal({ blocks, logs, onClose, projectId = null, onReques
         // own — a project report and a company-wide one look identical otherwise.
         scopeLabel: brief.scopeLabel,
         periodLabel: brief.periodLabel,
-        generatedAt: new Date(brief.generatedAt).toLocaleString(),
+        // A date, not a timestamp — seconds are noise on a client document.
+        generatedAt: new Date(brief.generatedAt).toLocaleDateString(undefined, {
+          day: "numeric", month: "long", year: "numeric",
+        }),
         sections: brief.sections.map((s) => ({ title: s.title, body: s.body })),
         stats: highlightStats(brief.facts),
-        financialRows: financialRows(brief.facts),
-        figures: images,
+        // Chart or table, drawn natively — never a screenshot of the canvas.
+        financials: financialVisual(brief.facts),
       });
 
       const uploadUrl = await generateUploadUrl();
@@ -184,7 +114,9 @@ export function ReportsModal({ blocks, logs, onClose, projectId = null, onReques
 
       await createReport({
         storageId,
-        includedBlockIds: chosen.map((b) => b._id) as never[],
+        // Reports no longer embed canvas blocks; a report is fully described by
+        // its scope, period and title, which is what makes it reproducible.
+        includedBlockIds: [] as never[],
         range: days,
         title: title.trim() || "Progress report",
         projectId: projectId as never,
@@ -202,8 +134,7 @@ export function ReportsModal({ blocks, logs, onClose, projectId = null, onReques
     }
   }
 
-  // Regenerate from a past report: re-capture only the block ids that still
-  // resolve to live blocks; dangling ids are dropped (spec §9 / §11 Q4).
+  // Regenerate a past report: re-run the brief for its scope and period.
   function regenerate(r: {
     includedBlockIds?: string[];
     blockCount: number;
@@ -224,19 +155,10 @@ export function ReportsModal({ blocks, logs, onClose, projectId = null, onReques
       return;
     }
 
-    // Deleted blocks only cost the report their figure — the narrative is
-    // rebuilt from the logs regardless, so regeneration still goes ahead.
-    const ids = (r.includedBlockIds ?? []).filter((id) => liveIds.has(id));
-    const skipped = r.blockCount - ids.length;
-    touched.current = true;
-    setSelected(new Set(ids));
+    // A report is reproducible from scope, period and title alone now that
+    // nothing is captured from the canvas.
     if (r.title) setTitle(r.title);
-    if (skipped > 0) {
-      toast(`Skipping ${skipped} deleted figure${skipped === 1 ? "" : "s"}`, {
-        description: "The written brief is rebuilt from the underlying logs.",
-      });
-    }
-    void generate(ids);
+    void generate();
   }
 
   return (
@@ -258,7 +180,7 @@ export function ReportsModal({ blocks, logs, onClose, projectId = null, onReques
             </div>
           </div>
           <DialogDescription className="sr-only">
-            Choose which canvas blocks to include and a period, then generate a PDF report.
+            Choose a period, then generate a written PDF brief for the current scope.
           </DialogDescription>
         </DialogHeader>
 
@@ -295,51 +217,8 @@ export function ReportsModal({ blocks, logs, onClose, projectId = null, onReques
                 </ToggleGroup>
               </div>
 
-              <div className="space-y-2">
-                <div className="flex items-baseline justify-between">
-                  <SectionLabel>Figures — optional</SectionLabel>
-                  <span className="font-mono text-[10.5px] text-zinc-600">
-                    {selected.size} of {blocks.length} selected
-                  </span>
-                </div>
-                <p className="text-[11px] leading-relaxed text-zinc-600">
-                  The report is written prose. Add charts only where they show
-                  something the text can&rsquo;t.
-                </p>
-                {blocks.length === 0 ? (
-                  <p className="text-xs leading-relaxed text-zinc-600">
-                    No blocks yet — the brief still writes itself from your logs.
-                  </p>
-                ) : (
-                  <div className="max-h-52 space-y-0.5 overflow-y-auto rounded-md border border-zinc-800 bg-zinc-900/60 p-1">
-                    {blocks.map((b) => {
-                      const cat = getCat(b.queryConfig?.category ?? "");
-                      return (
-                        <label
-                          key={b._id}
-                          className="flex cursor-pointer items-center gap-3 rounded px-2 py-1.5 hover:bg-zinc-800/60"
-                        >
-                          <Checkbox
-                            checked={selected.has(b._id)}
-                            onCheckedChange={() => toggle(b._id)}
-                            className="border-zinc-700 data-[state=checked]:border-violet-500 data-[state=checked]:bg-violet-500"
-                          />
-                          <span className={"h-1.5 w-1.5 shrink-0 rounded-full " + cat.dot} />
-                          <span className="min-w-0 flex-1 truncate text-[13px] text-zinc-300">
-                            {b.title}
-                          </span>
-                          <span className="shrink-0 font-mono text-[10px] uppercase text-zinc-600">
-                            {b.type}
-                          </span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-
               <Button
-                onClick={() => generate([...selected])}
+                onClick={() => generate()}
                 disabled={busy}
                 variant="outline"
                 className="w-full gap-2 border-violet-500/30 bg-violet-500/10 text-[13px] font-medium text-violet-300 hover:bg-violet-500/20 hover:text-violet-200 disabled:opacity-40"
@@ -387,12 +266,11 @@ export function ReportsModal({ blocks, logs, onClose, projectId = null, onReques
               </div>
               {pastReports.length === 0 ? (
                 <p className="mt-3 text-xs leading-relaxed text-zinc-600">
-                  No reports yet — pick blocks above to export your first.
+                  No reports yet — generate your first above.
                 </p>
               ) : (
                 <div className="mt-1">
                   {pastReports.map((r, i) => {
-                    const stale = r.liveBlocks < r.blockCount;
                     // Flagged so it's obvious why regenerate switches scope first.
                     const otherScope = (r.projectId ?? null) !== projectId;
                     return (
@@ -420,10 +298,10 @@ export function ReportsModal({ blocks, logs, onClose, projectId = null, onReques
                               <span className={otherScope ? "text-violet-400/80" : undefined}>
                                 {r.projectId ? r.projectName ?? "Deleted project" : BUSINESS_SCOPE_LABEL}
                               </span>
-                              · {periodLabel(r.range)} · {r.blockCount} block{r.blockCount === 1 ? "" : "s"}
-                              {stale ? (
+                              · {periodLabel(r.range)}
+                              {r.blockCount > 0 ? (
                                 <span className="inline-flex items-center gap-1 text-amber-500/80">
-                                  <AlertTriangle size={9} /> {r.liveBlocks} live
+                                  <AlertTriangle size={9} /> legacy block export
                                 </span>
                               ) : null}
                             </p>
@@ -437,7 +315,7 @@ export function ReportsModal({ blocks, logs, onClose, projectId = null, onReques
                             title={
                               otherScope
                                 ? `Covers a different scope — switch to ${r.projectId ? r.projectName ?? "a deleted project" : BUSINESS_SCOPE_LABEL} to regenerate`
-                                : "Regenerate from current block state"
+                                : "Regenerate from the current logs"
                             }
                             onClick={() => regenerate(r)}
                             disabled={busy}
@@ -474,25 +352,6 @@ export function ReportsModal({ blocks, logs, onClose, projectId = null, onReques
           </div>
         </ScrollArea>
 
-        {/* Offscreen capture stage — renders each selected block exactly as it
-            appears on-canvas so html-to-image can rasterize it (spec §9). */}
-        <div
-          aria-hidden
-          style={{ position: "fixed", top: 0, left: -100000, zIndex: -1, pointerEvents: "none" }}
-        >
-          {selectedBlocks.map((b) => (
-            <div
-              key={b._id}
-              ref={(el) => {
-                if (el) nodeRefs.current.set(b._id, el);
-                else nodeRefs.current.delete(b._id);
-              }}
-              style={{ width: CAPTURE_W, height: captureHeight(b), background: "#09090b" }}
-            >
-              <BlockBody block={b} logs={periodLogs} />
-            </div>
-          ))}
-        </div>
       </DialogContent>
     </Dialog>
   );

@@ -8,11 +8,11 @@
 // Imported dynamically from the reports modal so react-pdf stays out of the
 // initial bundle — it's only pulled in when a user actually exports.
 import {
-  pdf, Document, Page, View, Text, Image, StyleSheet,
+  pdf, Document, Page, View, Text, StyleSheet,
 } from '@react-pdf/renderer';
-import type { Stat, TableRow } from '@/lib/report-tables';
+import type { Stat } from '@/lib/report-tables';
+import { CHART_INK, type FinancialVisual } from '@/lib/report-chart';
 
-export type ReportFigure = { title: string; image: string };
 export type ReportPdfSection = { title: string; body: string };
 
 export type ReportPdfInput = {
@@ -22,8 +22,8 @@ export type ReportPdfInput = {
   generatedAt: string;
   sections: ReportPdfSection[];
   stats?: Stat[];
-  financialRows?: TableRow[];
-  figures?: ReportFigure[];
+  /** Chart or table for the Financials section — chosen by financialVisual(). */
+  financials?: FinancialVisual;
 };
 
 // One scale, so spacing stays proportional rather than ad hoc.
@@ -34,7 +34,9 @@ const HAIRLINE = '#e7e7ea';
 
 const styles = StyleSheet.create({
   page: {
-    backgroundColor: '#ffffff',
+    // The validated light chart surface — the hue was checked for contrast
+    // against this exact tone, not against pure white.
+    backgroundColor: '#fcfcfb',
     // ~24mm sides: the single biggest contributor to a document feeling airy.
     paddingTop: 62,
     paddingHorizontal: 68,
@@ -141,19 +143,51 @@ const styles = StyleSheet.create({
     color: MUTED,
   },
 
-  figure: {
-    marginTop: 26,
+  // Native vector chart. Drawn from the numbers rather than captured, so it is
+  // light-mode and print-sharp regardless of the app's theme.
+  chart: {
+    marginTop: 22,
   },
-  figureCaption: {
+  chartCaption: {
     fontSize: 7.5,
     letterSpacing: 1.1,
     textTransform: 'uppercase',
     color: MUTED,
+    marginBottom: 14,
+  },
+  barRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    // Surface gap between adjacent bars, so fills never touch.
     marginBottom: 9,
   },
-  figureImage: {
-    width: '100%',
-    borderRadius: 6,
+  barLabel: {
+    fontSize: 9,
+    color: BODY,
+    width: 96,
+    paddingRight: 10,
+  },
+  barTrack: {
+    flexGrow: 1,
+    flexBasis: 0,
+    height: 11,
+    justifyContent: 'center',
+  },
+  barFill: {
+    height: 11,
+    backgroundColor: CHART_INK,
+    // Rounded data-end, anchored square to the baseline it grows from.
+    borderTopRightRadius: 4,
+    borderBottomRightRadius: 4,
+  },
+  barValue: {
+    fontSize: 9,
+    // Text wears text ink, never the series colour.
+    color: INK,
+    fontFamily: 'Helvetica-Bold',
+    width: 96,
+    paddingLeft: 12,
+    textAlign: 'right',
   },
 
   footer: {
@@ -168,10 +202,52 @@ const styles = StyleSheet.create({
   },
 });
 
+function FinancialsVisual({ visual }: { visual: FinancialVisual }) {
+  if (!visual) return null;
+
+  if (visual.kind === 'chart') {
+    return (
+      <View style={styles.chart}>
+        <Text style={styles.chartCaption}>Spend by category · {visual.currency}</Text>
+        {visual.bars.map((bar, i) => (
+          <View key={i} style={styles.barRow} wrap={false}>
+            <Text style={styles.barLabel}>{bar.label}</Text>
+            <View style={styles.barTrack}>
+              {/* Percentage width keeps the bars proportional at any page size. */}
+              <View style={[styles.barFill, { width: `${Math.max(2, bar.ratio * 100)}%` }]} />
+            </View>
+            <Text style={styles.barValue}>{bar.formatted}</Text>
+          </View>
+        ))}
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.table}>
+      {visual.rows.map((row, r) => {
+        const isTotal = r === visual.rows.length - 1 && row.label === 'Total spend';
+        return (
+          <View
+            key={r}
+            style={
+              r === visual.rows.length - 1
+                ? [styles.tableRow, styles.tableRowLast]
+                : styles.tableRow
+            }
+            wrap={false}
+          >
+            <Text style={isTotal ? styles.tableTotalLabel : styles.tableLabel}>{row.label}</Text>
+            <Text style={styles.tableValue}>{row.value}</Text>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
 export async function buildReportPdf(input: ReportPdfInput): Promise<Blob> {
   const stats = input.stats ?? [];
-  const rows = input.financialRows ?? [];
-  const figures = input.figures ?? [];
 
   const doc = (
     <Document title={input.title}>
@@ -195,41 +271,15 @@ export async function buildReportPdf(input: ReportPdfInput): Promise<Blob> {
         )}
 
         {input.sections.map((section, i) => (
-          // minPresenceAhead keeps a heading from stranding at a page foot.
-          <View key={i} style={styles.section} minPresenceAhead={72}>
+          // Sections are capped at four sentences, so one can never legitimately
+          // need to split across pages. Keeping each whole prevents both an
+          // orphaned heading and the premature break that minPresenceAhead
+          // caused — it pushed a section that had ample room onto a blank page.
+          <View key={i} style={styles.section} wrap={false}>
             <Text style={styles.sectionTitle}>{section.title}</Text>
             <Text style={styles.paragraph}>{section.body}</Text>
 
-            {section.title === 'Financials' && rows.length > 0 && (
-              <View style={styles.table}>
-                {rows.map((row, r) => {
-                  const isTotal = r === rows.length - 1 && row.label === 'Total spend';
-                  return (
-                    <View
-                      key={r}
-                      style={
-                        r === rows.length - 1
-                          ? [styles.tableRow, styles.tableRowLast]
-                          : styles.tableRow
-                      }
-                      wrap={false}
-                    >
-                      <Text style={isTotal ? styles.tableTotalLabel : styles.tableLabel}>
-                        {row.label}
-                      </Text>
-                      <Text style={styles.tableValue}>{row.value}</Text>
-                    </View>
-                  );
-                })}
-              </View>
-            )}
-          </View>
-        ))}
-
-        {figures.map((figure, i) => (
-          <View key={i} style={styles.figure} wrap={false}>
-            <Text style={styles.figureCaption}>{figure.title}</Text>
-            <Image src={figure.image} style={styles.figureImage} />
+            {section.title === 'Financials' && <FinancialsVisual visual={input.financials ?? null} />}
           </View>
         ))}
 

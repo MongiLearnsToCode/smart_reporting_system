@@ -16,6 +16,7 @@ import type * as logs from "../logs.js";
 import type * as migrate from "../migrate.js";
 import type * as projects from "../projects.js";
 import type * as reports from "../reports.js";
+import type * as seed from "../seed.js";
 
 import type {
   ApiFromModules,
@@ -32,6 +33,7 @@ declare const fullApi: ApiFromModules<{
   migrate: typeof migrate;
   projects: typeof projects;
   reports: typeof reports;
+  seed: typeof seed;
 }>;
 
 /**
