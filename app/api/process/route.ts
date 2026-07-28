@@ -7,6 +7,7 @@ import { normalizeEntities, overallConfidence, primaryCategory, statusFor } from
 import { resolveDateReference } from '@/utils/api/date-reference';
 import { CATEGORIES } from '@/lib/categories';
 import { ENTITY_TYPES, type LogEntity } from '@/lib/dashboard-utils';
+import { convertEntities } from '@/utils/api/fx-apply';
 import { convexForUser } from '@/utils/convex/serverClient';
 import { api } from '@/convex/_generated/api';
 
@@ -81,7 +82,8 @@ export async function POST(request: NextRequest) {
       '  "sentiment": "positive|neutral|negative or null", "urgency": "low|medium|high or null",',
       '  "confidence": number between 0 and 1 — how certain you are about THIS entity }',
       `Today's date for resolving relative dates: ${submittedAt.toLocaleString('en-US', { timeZone: timezone })} (timezone: ${timezone})`,
-      `Default currency: ${currency}. Use this when no currency is specified.`,
+      `Default currency: ${currency}. Use this when the entry names no currency.`,
+      'Never convert between currencies. Record "amount" and "currency" exactly as the entry states them — an entry saying "6,500 rand" is amount 6500, currency ZAR. Conversion is done afterwards from published exchange rates, not by you.',
       `Write any free-text fields in ${aiLanguage}.`,
       knownClients.length
         ? `Known clients: ${knownClients.join(', ')}. If the entry refers to one of these (even loosely, e.g. an abbreviation), use the EXACT known spelling. Only introduce a new client name if it clearly is not one of the known clients.`
@@ -127,6 +129,13 @@ export async function POST(request: NextRequest) {
       const resolved = resolveDateReference(entity.date_reference, submittedAt, timezone);
       return resolved ? { ...entity, date: resolved } : entity;
     });
+
+    // Convert anything not already in the user's currency, using a rate from a
+    // rate provider — never from the model, which cannot know one. Runs after
+    // date resolution so each amount is priced on the day it actually happened.
+    // A provider miss leaves the original currency in place rather than
+    // guessing; the report then shows that currency in its own bucket.
+    entities = (await convertEntities(convex, entities, currency, submittedAt)).entities;
 
     const aiConfidence = overallConfidence(entities);
     const category = primaryCategory(entities);

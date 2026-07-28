@@ -13,7 +13,7 @@ import {
 import type { Stat } from '@/lib/report-tables';
 import { CHART_INK, type FinancialVisual } from '@/lib/report-chart';
 
-export type ReportPdfSection = { title: string; body: string };
+export type ReportPdfSection = { title: string; body: string; items?: string[] };
 
 export type ReportPdfInput = {
   title: string;
@@ -38,9 +38,9 @@ const styles = StyleSheet.create({
     // against this exact tone, not against pure white.
     backgroundColor: '#fcfcfb',
     // ~24mm sides: the single biggest contributor to a document feeling airy.
-    paddingTop: 62,
+    paddingTop: 52,
     paddingHorizontal: 68,
-    paddingBottom: 76,
+    paddingBottom: 48,
     fontFamily: 'Helvetica',
     color: BODY,
   },
@@ -65,14 +65,14 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   headerRule: {
-    marginTop: 30,
+    marginTop: 24,
     borderBottomWidth: 0.75,
     borderBottomColor: HAIRLINE,
   },
 
   statStrip: {
     flexDirection: 'row',
-    marginTop: 30,
+    marginTop: 26,
   },
   stat: {
     flexGrow: 1,
@@ -91,9 +91,17 @@ const styles = StyleSheet.create({
     fontFamily: 'Helvetica-Bold',
     marginTop: 7,
   },
+  statDelta: {
+    fontSize: 8.5,
+    color: MUTED,
+    marginTop: 3,
+  },
 
   section: {
-    marginTop: 34,
+    // Tight enough that a five-section brief still lands on one page. The
+    // decisions section is last, and a one-page report whose call to action
+    // sits alone on page two has buried the only part that needs answering.
+    marginTop: 24,
   },
   sectionTitle: {
     fontSize: 8.5,
@@ -101,7 +109,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     color: MUTED,
     fontFamily: 'Helvetica-Bold',
-    marginBottom: 12,
+    marginBottom: 10,
   },
   paragraph: {
     fontSize: 10.5,
@@ -143,10 +151,32 @@ const styles = StyleSheet.create({
     color: MUTED,
   },
 
+  // The asks. A short list, because the one thing a reader must act on should
+  // not have to be picked back out of a paragraph.
+  askList: {
+    marginTop: 8,
+  },
+  askRow: {
+    flexDirection: 'row',
+    marginBottom: 5,
+  },
+  askBullet: {
+    fontSize: 10.5,
+    lineHeight: 1.6,
+    color: MUTED,
+    width: 14,
+  },
+  askText: {
+    fontSize: 10.5,
+    lineHeight: 1.6,
+    color: INK,
+    flexShrink: 1,
+  },
+
   // Native vector chart. Drawn from the numbers rather than captured, so it is
   // light-mode and print-sharp regardless of the app's theme.
   chart: {
-    marginTop: 22,
+    marginTop: 18,
   },
   chartCaption: {
     fontSize: 7.5,
@@ -192,7 +222,7 @@ const styles = StyleSheet.create({
 
   footer: {
     position: 'absolute',
-    bottom: 38,
+    bottom: 30,
     left: 68,
     right: 68,
     fontSize: 7.5,
@@ -265,6 +295,7 @@ export async function buildReportPdf(input: ReportPdfInput): Promise<Blob> {
               <View key={i} style={styles.stat}>
                 <Text style={styles.statLabel}>{s.label}</Text>
                 <Text style={styles.statValue}>{s.value}</Text>
+                {s.delta ? <Text style={styles.statDelta}>{s.delta} vs previous</Text> : null}
               </View>
             ))}
           </View>
@@ -278,6 +309,17 @@ export async function buildReportPdf(input: ReportPdfInput): Promise<Blob> {
           <View key={i} style={styles.section} wrap={false}>
             <Text style={styles.sectionTitle}>{section.title}</Text>
             <Text style={styles.paragraph}>{section.body}</Text>
+
+            {section.items?.length ? (
+              <View style={styles.askList}>
+                {section.items.map((item, j) => (
+                  <View key={j} style={styles.askRow} wrap={false}>
+                    <Text style={styles.askBullet}>—</Text>
+                    <Text style={styles.askText}>{item}</Text>
+                  </View>
+                ))}
+              </View>
+            ) : null}
 
             {section.title === 'Financials' && <FinancialsVisual visual={input.financials ?? null} />}
           </View>

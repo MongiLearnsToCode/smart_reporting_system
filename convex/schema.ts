@@ -47,6 +47,16 @@ export const entityValidator = v.object({
   date_reference: v.optional(ns),
   amount: v.optional(nn),
   currency: v.optional(ns),
+  // Conversion to the user's default currency. Additive: `amount`/`currency`
+  // always hold what the user actually said, so a rate change or a switch of
+  // default currency can never rewrite history. Absent when no rate was
+  // obtainable — downstream then reports the original currency in its own
+  // bucket rather than guessing.
+  base_amount: v.optional(nn),
+  base_currency: v.optional(ns),
+  fx_rate: v.optional(nn),
+  fx_date: v.optional(ns),
+  fx_source: v.optional(ns),
   client: v.optional(ns),
   project: v.optional(ns),
   task: v.optional(ns),
@@ -172,4 +182,21 @@ export default defineSchema({
     storageId: v.id('_storage'),
     createdAt: v.number(),
   }).index('by_user', ['userId']),
+
+  // Cached exchange rates. Reference data, not user data: a rate for a pair on
+  // a date is the same for everyone, so one fetch serves every user and a
+  // currency-change backfill re-converts months of history without hammering
+  // the provider. Rows are immutable once written — a past day's rate is
+  // settled, and today's is re-fetched by writing a row for tomorrow.
+  fxRates: defineTable({
+    /** "<FROM>:<TO>:<YYYY-MM-DD>" — see rateKey() in lib/fx.ts. */
+    key: v.string(),
+    from: v.string(),
+    to: v.string(),
+    /** The date the rate is dated, which may trail the date requested. */
+    date: v.string(),
+    rate: v.number(),
+    source: v.string(),
+    fetchedAt: v.number(),
+  }).index('by_key', ['key']),
 });

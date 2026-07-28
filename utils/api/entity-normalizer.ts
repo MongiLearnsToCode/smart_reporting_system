@@ -85,6 +85,11 @@ export function normalizeEntity(raw: unknown): LogEntity {
     confidence: asConfidence(e.confidence),
     names: asStringArray(e.names),
     tags: asStringArray(e.tags),
+    // No fx_* fields here, deliberately. This function is the only thing that
+    // turns model output into an entity, and it emits an explicit field list —
+    // so a model that hallucinates a "base_amount" or an "fx_rate" has it
+    // dropped on the floor. Conversion is added afterwards, from a rate
+    // provider, in utils/api/fx-apply.ts.
   };
 }
 

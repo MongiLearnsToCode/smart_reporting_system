@@ -5,6 +5,8 @@ import {
   formatTotals,
   activeSections,
   sectionHasSubstance,
+  compareFacts,
+  changePhrase,
 } from '../../lib/report-brief';
 import type { Log, LogEntity } from '../../lib/dashboard-utils';
 
@@ -202,5 +204,65 @@ describe('sectionHasSubstance', () => {
       'financials',
       'next_steps',
     ]);
+  });
+});
+
+describe('compareFacts', () => {
+  const spend = (amount: number, currency = 'USD') =>
+    log({ entities: [entity({ type: 'expense', amount, currency })] });
+
+  it('reports the change against the equal-length window before it', () => {
+    const cmp = compareFacts(
+      buildBriefFacts([spend(4200)]),
+      buildBriefFacts([spend(6100)]),
+      30,
+    );
+    expect(cmp.spend).toEqual([
+      { currency: 'USD', current: 4200, previous: 6100, changePct: -31 },
+    ]);
+    expect(cmp.windowDays).toBe(30);
+    expect(cmp.priorEmpty).toBe(false);
+  });
+
+  it('calls a currency new rather than up an infinite percentage', () => {
+    // Dividing by a previous total of zero is not a percentage, and printing
+    // one would be the sort of nonsense figure that discredits a whole report.
+    const cmp = compareFacts(buildBriefFacts([spend(4200)]), buildBriefFacts([]), 30);
+    expect(cmp.spend[0].changePct).toBeNull();
+    expect(cmp.priorEmpty).toBe(true);
+  });
+
+  it('ignores a currency that only appears in the earlier window', () => {
+    // A report is about the period it covers. "ZAR spend is down 100%" when no
+    // rands were spent this month is noise, not insight.
+    const cmp = compareFacts(
+      buildBriefFacts([spend(4200)]),
+      buildBriefFacts([spend(4200), spend(6500, 'ZAR')]),
+      30,
+    );
+    expect(cmp.spend.map((d) => d.currency)).toEqual(['USD']);
+  });
+
+  it('tracks completions as a count, not a percentage', () => {
+    const done = (n: number) =>
+      buildBriefFacts(
+        Array.from({ length: n }, (_, i) =>
+          log({ entities: [entity({ type: 'task', status: 'complete', deliverable: `D${i}` })] })),
+      );
+    expect(compareFacts(done(5), done(2), 7).completed).toEqual({
+      current: 5, previous: 2, change: 3,
+    });
+  });
+});
+
+describe('changePhrase', () => {
+  it('reads as something a sentence can absorb', () => {
+    expect(changePhrase(-31)).toBe('down 31% from');
+    expect(changePhrase(12)).toBe('up 12% from');
+    expect(changePhrase(0)).toBe('level with');
+  });
+
+  it('says nothing when there is nothing to compare against', () => {
+    expect(changePhrase(null)).toBeNull();
   });
 });

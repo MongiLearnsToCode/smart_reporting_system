@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildBriefFacts } from '../../lib/report-brief';
+import { buildBriefFacts, compareFacts } from '../../lib/report-brief';
 import { financialRows, highlightStats } from '../../lib/report-tables';
 import type { Log, LogEntity } from '../../lib/dashboard-utils';
 
@@ -55,7 +55,7 @@ describe('financialRows', () => {
 });
 
 describe('highlightStats', () => {
-  it('leads with money, then delivery', () => {
+  it('leads with the outcome, then the workings behind it', () => {
     const facts = buildBriefFacts([
       log({ entities: [entity({ type: 'income', amount: 5000, currency: 'USD' })] }),
       log({ entities: [entity({ type: 'expense', amount: 1200, currency: 'USD' })] }),
@@ -63,10 +63,51 @@ describe('highlightStats', () => {
     ]);
 
     expect(highlightStats(facts)).toEqual([
+      { label: 'Net position', value: 'USD 3,800' },
       { label: 'Income', value: 'USD 5,000' },
       { label: 'Spend', value: 'USD 1,200' },
-      { label: 'Completed', value: '1' },
+      { label: 'Delivered', value: '1' },
     ]);
+  });
+
+  it('carries direction of travel on money when a prior period exists', () => {
+    const current = buildBriefFacts([
+      log({ entities: [entity({ type: 'expense', amount: 4200, currency: 'USD' })] }),
+    ]);
+    const previous = buildBriefFacts([
+      log({ entities: [entity({ type: 'expense', amount: 6100, currency: 'USD' })] }),
+    ]);
+    // The delta is its own field, not glued onto the value: inside a narrow
+    // stat column the combined string wrapped as "USD 4,200 -" / "31%", which
+    // reads as a negative amount.
+    const stats = highlightStats(current, compareFacts(current, previous, 30));
+    const spend = stats.find((s) => s.label === 'Spend')!;
+    expect(spend.value).toBe('USD 4,200');
+    expect(spend.delta).toBe('-31%');
+  });
+
+  it('states a bare figure when there is no prior period to compare against', () => {
+    const current = buildBriefFacts([
+      log({ entities: [entity({ type: 'expense', amount: 4200, currency: 'USD' })] }),
+    ]);
+    const stats = highlightStats(current, compareFacts(current, buildBriefFacts([]), 30));
+    const spend = stats.find((s) => s.label === 'Spend')!;
+    expect(spend.value).toBe('USD 4,200');
+    expect(spend.delta).toBeUndefined();
+  });
+
+  it('uses an ASCII minus, the only one Helvetica will actually print', () => {
+    // U+2212 is absent from WinAnsi; react-pdf drops it silently, and "-31%"
+    // printed as "31%" turns a fall in spending into what reads as a rise.
+    const current = buildBriefFacts([
+      log({ entities: [entity({ type: 'expense', amount: 4200, currency: 'USD' })] }),
+    ]);
+    const previous = buildBriefFacts([
+      log({ entities: [entity({ type: 'expense', amount: 6100, currency: 'USD' })] }),
+    ]);
+    const delta = highlightStats(current, compareFacts(current, previous, 30))
+      .find((s) => s.label === 'Spend')!.delta!;
+    expect(delta).toMatch(/^[\x20-\x7e]+$/);
   });
 
   it('never exceeds four stats — beyond that it stops being a glance', () => {

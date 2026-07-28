@@ -10,6 +10,7 @@
 
 import type * as blocks from "../blocks.js";
 import type * as crons from "../crons.js";
+import type * as fx from "../fx.js";
 import type * as lib_identity from "../lib/identity.js";
 import type * as lib_layout from "../lib/layout.js";
 import type * as logs from "../logs.js";
@@ -27,6 +28,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   blocks: typeof blocks;
   crons: typeof crons;
+  fx: typeof fx;
   "lib/identity": typeof lib_identity;
   "lib/layout": typeof lib_layout;
   logs: typeof logs;

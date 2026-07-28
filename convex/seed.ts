@@ -21,6 +21,11 @@ type SeedEntity = {
   date?: string | null;
   amount?: number | null;
   currency?: string | null;
+  base_amount?: number | null;
+  base_currency?: string | null;
+  fx_rate?: number | null;
+  fx_date?: string | null;
+  fx_source?: string | null;
   client?: string | null;
   project?: string | null;
   task?: string | null;
@@ -105,7 +110,16 @@ const NORTHWIND: SeedLog[] = [
   {
     daysAgo: 19, project: 'northwind', category: 'Marketing',
     raw: 'Paid for the launch event photographer deposit, ZAR 6,500.',
-    entities: [e({ type: 'expense', category: 'Marketing', amount: 6500, currency: 'ZAR', client: 'Northwind', task: 'Launch event' })],
+    // Carries the conversion the ingest path would have attached, so the demo
+    // account exercises the converted-money route rather than the fallback
+    // where a second currency gets its own bucket. Rate is the real ECB close
+    // for the entry's date; the original ZAR figure is preserved beside it.
+    entities: [e({
+      type: 'expense', category: 'Marketing', amount: 6500, currency: 'ZAR',
+      client: 'Northwind', task: 'Launch event',
+      base_amount: 397.02, base_currency: 'USD', fx_rate: 0.06108,
+      fx_date: '2026-07-09', fx_source: 'ECB (frankfurter.dev)',
+    })],
   },
   {
     daysAgo: 24, project: 'northwind', category: 'Projects',

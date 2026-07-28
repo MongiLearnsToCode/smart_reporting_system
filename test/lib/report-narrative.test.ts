@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { buildBriefFacts, activeSections } from '../../lib/report-brief';
 import {
   narrateSection, joinList, plural, buildSectionPrompt, sentenceCase,
-  countWord, periodPhrase,
+  countWord, periodPhrase, decisionItems,
 } from '../../lib/report-narrative';
 import { hasFiller } from '../../lib/report-prose';
 import type { Log, LogEntity } from '../../lib/dashboard-utils';
@@ -84,8 +84,9 @@ describe('number style', () => {
   it('does not mix spelled and numeric counts in one sentence', () => {
     // "Two items completed, with 1 blocked" reads as machine output.
     const text = narrateSection('executive_summary', facts, ctx);
-    expect(text).toContain('Two items completed, with one blocked');
-    expect(text).not.toMatch(/\bwith \d+ blocked/);
+    expect(text).toContain('completed two items');
+    expect(text).toContain('One item needs a decision');
+    expect(text).not.toMatch(/\b\d+ (items?|entries) (completed|blocked)/);
   });
 
   it('keeps money numeric while counts stay spelled', () => {
@@ -95,7 +96,7 @@ describe('number style', () => {
     ]);
     const text = narrateSection('executive_summary', mixed, ctx);
     expect(text).toContain('USD 1,200');
-    expect(text).toContain('One item completed');
+    expect(text).toContain('completed one item');
   });
 });
 
@@ -128,19 +129,38 @@ describe('narrateSection', () => {
     log({ category: 'Tasks', entities: [entity({ type: 'task', status: 'blocked', task: 'Vendor contract' })] }),
   ]);
 
-  it('writes an executive summary naming scope, volume and money', () => {
+  it('opens the executive summary on what was achieved, not on how much was logged', () => {
+    // An entry count measures use of this tool, not the state of the business.
+    // It is the one number a client explicitly cannot act on, so it does not
+    // get the opening sentence.
     const text = narrateSection('executive_summary', facts, ctx);
     expect(text).toContain('Acme Rebrand');
-    expect(text).toContain('four entries');
+    expect(text).toMatch(/^Acme Rebrand completed one item/);
     expect(text).toContain('USD 5,000');
     expect(text).toContain('USD 1,200');
+    expect(text).not.toContain('four entries');
+    // Deliverable names belong to Progress, which sits directly below. An
+    // executive summary that repeats the section under it is twice the length
+    // for the same information.
+    expect(text).not.toContain('Logo pack');
   });
 
-  it('writes progress covering completions and blockers', () => {
+  it('falls back to volume only when the period finished nothing', () => {
+    const nothing = buildBriefFacts([
+      log({ category: 'Clients', entities: [entity({ type: 'client_update' })] }),
+      log({ category: 'Clients', entities: [entity({ type: 'client_update' })] }),
+    ]);
+    const text = narrateSection('executive_summary', nothing, ctx);
+    expect(text).toContain('two entries');
+    expect(text).toContain('nothing yet completed');
+  });
+
+  it('writes progress covering what was completed and delivered', () => {
     const text = narrateSection('progress', facts, ctx);
     expect(text).toContain('One item completed');
     expect(text).toContain('Logo pack');
-    expect(text).toContain('Vendor contract');
+    // Blockers are named once, in the decisions section — see below.
+    expect(text).not.toContain('Vendor contract');
   });
 
   it('writes financials with a net position', () => {
@@ -158,10 +178,17 @@ describe('narrateSection', () => {
     expect(narrateSection('financials', loss, ctx)).toContain('net outflow of USD 500');
   });
 
-  it('writes next steps from blocked and outstanding work', () => {
+  it('leaves blockers out of next steps — they belong to the decisions section', () => {
+    // Next Steps is what the sender will do; Needs Your Decision is what the
+    // reader must. Stating a blocker in both turns the ask back into noise.
     const text = narrateSection('next_steps', facts, ctx);
-    expect(text).toContain('One item blocked');
-    expect(text).toContain('Vendor contract');
+    expect(text).not.toContain('Vendor contract');
+    expect(text).not.toMatch(/blocked/i);
+  });
+
+  it('puts the blocker in the decisions section instead, worded as an ask', () => {
+    expect(narrateSection('decisions', facts, ctx)).toContain('held up pending a decision');
+    expect(decisionItems(facts)).toEqual(['Vendor contract']);
   });
 
   it('never emits filler', () => {

@@ -279,6 +279,32 @@ export const setProject = mutation({
   },
 });
 
+// Rewrites the converted-currency fields on a batch of logs. Used only by the
+// currency-change backfill: the user picked a new default, so every stored
+// conversion now targets the wrong currency and has to be recomputed from the
+// originals. Amounts and currencies as the user stated them are untouched —
+// the backfill recomputes from them, never over them.
+export const reconvert = mutation({
+  args: {
+    updates: v.array(v.object({ id: v.id('logs'), entities: v.array(entityValidator) })),
+  },
+  handler: async (ctx, { updates }) => {
+    const userId = await requireUserId(ctx);
+    let written = 0;
+    for (const { id, entities } of updates.slice(0, 200)) {
+      const log = await ctx.db.get(id);
+      if (!log || log.userId !== userId) continue;
+      // The caller re-derived these from this log's own entities; a length
+      // mismatch means it was working from a stale read, so skip rather than
+      // write entities that may not correspond to this log at all.
+      if (log.entities.length !== entities.length) continue;
+      await ctx.db.patch(id, { entities });
+      written++;
+    }
+    return written;
+  },
+});
+
 // Exclude a log from reports / block aggregation (spec §8).
 export const setExcluded = mutation({
   args: { id: v.id('logs'), excluded: v.boolean() },

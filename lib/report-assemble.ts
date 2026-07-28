@@ -5,8 +5,8 @@
 // don't support is discarded in favour of the deterministic version, so a
 // hallucinated number can never reach a client.
 
-import { activeSections, SECTION_TITLES, type BriefFacts, type SectionId } from "./report-brief";
-import { narrateSection, type BriefContext } from "./report-narrative";
+import { activeSections, SECTION_TITLES, type BriefComparison, type BriefFacts, type SectionId } from "./report-brief";
+import { decisionItems, narrateSection, type BriefContext } from "./report-narrative";
 import { tightenProse } from "./report-prose";
 
 export type BriefSection = {
@@ -15,6 +15,8 @@ export type BriefSection = {
   body: string;
   /** Which pipeline produced the text — surfaced in tests and diagnostics. */
   source: "ai" | "facts";
+  /** Rendered as a short bulleted list under the body. Asks, verbatim. */
+  items?: string[];
 };
 
 export type Brief = {
@@ -24,6 +26,8 @@ export type Brief = {
   generatedAt: number;
   sections: BriefSection[];
   facts: BriefFacts;
+  /** Deltas against the preceding window; null when none could be built. */
+  comparison: BriefComparison | null;
 };
 
 const EPSILON = 0.005;
@@ -60,6 +64,20 @@ export function collectAllowedNumbers(facts: BriefFacts, ctx: BriefContext): num
   // Numbers appearing in the period label ("Last 30 days") are legitimate.
   for (const match of ctx.periodLabel.matchAll(/\d+(?:\.\d+)?/g)) {
     allowed.push(Number(match[0]));
+  }
+
+  // Comparison figures. Without these the guard would reject the model for
+  // repeating a prior-period total or a percentage change that the facts do
+  // in fact support — the deltas are computed here, not by the model.
+  const cmp = ctx.comparison;
+  if (cmp) {
+    allowed.push(cmp.windowDays, cmp.completed.previous, Math.abs(cmp.completed.change));
+    for (const group of [cmp.spend, cmp.income]) {
+      for (const d of group) {
+        allowed.push(d.current, d.previous, Math.round(d.previous));
+        if (d.changePct !== null) allowed.push(d.changePct, Math.abs(d.changePct));
+      }
+    }
   }
 
   return allowed.filter((n) => Number.isFinite(n));
@@ -100,15 +118,20 @@ export function assembleBrief(opts: {
 
   const sections: BriefSection[] = activeSections(facts).map((id) => {
     const fallback = tightenProse(narrateSection(id, facts, ctx), maxSentences);
+    // The asks are quoted from the user's own entries, never paraphrased.
+    const items = id === "decisions" ? decisionItems(facts) : undefined;
     const candidate = aiSections?.[id];
 
-    if (typeof candidate === "string") {
+    // The decisions section is never model-written. A blocker restated more
+    // diplomatically stops being a blocker, and the whole value of the section
+    // is that it says the uncomfortable thing in the sender's own words.
+    if (id !== "decisions" && typeof candidate === "string") {
       const cleaned = tightenProse(candidate, maxSentences);
       if (cleaned && !hasUnsupportedFigures(cleaned, allowed)) {
-        return { id, title: SECTION_TITLES[id], body: cleaned, source: "ai" as const };
+        return { id, title: SECTION_TITLES[id], body: cleaned, source: "ai" as const, items };
       }
     }
-    return { id, title: SECTION_TITLES[id], body: fallback, source: "facts" as const };
+    return { id, title: SECTION_TITLES[id], body: fallback, source: "facts" as const, items };
   });
 
   return {
@@ -120,5 +143,6 @@ export function assembleBrief(opts: {
     // rather than print a heading over whitespace.
     sections: sections.filter((s) => s.body.trim().length > 0),
     facts,
+    comparison: ctx.comparison ?? null,
   };
 }

@@ -43,7 +43,7 @@ async function render(logs: Log[]) {
     scopeLabel: brief.scopeLabel,
     periodLabel: brief.periodLabel,
     generatedAt: '28 July 2026',
-    sections: brief.sections.map((s) => ({ title: s.title, body: s.body })),
+    sections: brief.sections.map((s) => ({ title: s.title, body: s.body, items: s.items })),
     stats: highlightStats(facts),
     financials: financialVisual(facts),
   });
@@ -69,5 +69,21 @@ describe('buildReportPdf', () => {
   it('renders when there is nothing to chart or tabulate', async () => {
     const pdf = await render([log('Tasks', [entity({ type: 'task', status: 'open', task: 'Draft' })])]);
     expect(pdf.subarray(0, 5).toString()).toBe('%PDF-');
+  }, 30000);
+
+  it('renders the asks list without spilling the call to action onto a second page', async () => {
+    // The decisions section is last and must stay with the rest of the brief:
+    // a one-page report whose only actionable part sits alone on page two has
+    // buried it. Rendering is the only way to catch this — it is a layout
+    // outcome, not a value any unit test can assert.
+    const pdf = await render([
+      ...WORK,
+      log('Projects', [entity({ type: 'task', status: 'blocked', task: 'Printer contract, vendor gone quiet' })]),
+      log('Tasks', [entity({ type: 'task', status: 'blocked', task: 'Website copy deck, waiting on the founder interview' })]),
+    ]);
+    expect(pdf.subarray(0, 5).toString()).toBe('%PDF-');
+    // /Type /Page appears once per page (plus /Pages for the tree).
+    const pages = (pdf.toString('latin1').match(/\/Type\s*\/Page[^s]/g) ?? []).length;
+    expect(pages).toBe(1);
   }, 30000);
 });

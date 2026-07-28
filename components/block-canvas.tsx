@@ -46,11 +46,14 @@ export function BlockCanvas({
   onViewSource,
   tier = 'free',
   projectId = null,
+  currency = null,
 }: {
   blocks: ConvexBlockDoc[];
   logs: Log[];
   onViewSource: (block: ConvexBlockDoc) => void;
   tier?: Tier;
+  /** The user's default currency; every figure a block totals is stated in it. */
+  currency?: string | null;
   /** Scope the canvas is showing; narrows AI summaries to the same logs. */
   projectId?: string | null;
 }) {
@@ -408,7 +411,7 @@ export function BlockCanvas({
             </div>
 
             <div className="h-full">
-              <BlockBody block={block} logs={logs} />
+              <BlockBody block={block} logs={logs} currency={currency} />
             </div>
           </div>
         ))}

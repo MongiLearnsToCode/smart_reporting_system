@@ -5,7 +5,10 @@
 // A report must always generate — a client deadline can't depend on an API.
 
 import {
+  changePhrase,
+  formatAmount,
   formatTotals,
+  type BriefComparison,
   type BriefFacts,
   type SectionId,
 } from "./report-brief";
@@ -13,6 +16,8 @@ import {
 export type BriefContext = {
   scopeLabel: string;
   periodLabel: string;
+  /** Deltas against the preceding window, when one could be built. */
+  comparison?: BriefComparison | null;
 };
 
 const NUMBER_WORDS = [
@@ -88,25 +93,49 @@ function categoryPhrase(facts: BriefFacts): string {
 
 function executiveSummary(facts: BriefFacts, ctx: BriefContext): string {
   const parts: string[] = [];
-  const categories = categoryPhrase(facts);
-  parts.push(
-    `${ctx.scopeLabel} recorded ${plural(facts.entryCount, "entry", "entries")} ${periodPhrase(ctx.periodLabel)}` +
-      (categories ? `, concentrated in ${categories}.` : "."),
-  );
+  const period = periodPhrase(ctx.periodLabel);
 
-  if (facts.income.length && facts.spend.length) {
+  // Open on what was achieved, not on how much was logged. An entry count
+  // measures use of this tool, not the state of the business, and it is the
+  // single most common way a report opens on something the reader can't act on.
+  //
+  // Deliberately no deliverable names here: Progress lists them a few lines
+  // below, and an executive summary that repeats the section under it is twice
+  // the length for the same information.
+  if (facts.tasks.completed > 0) {
+    const wip = facts.tasks.inProgress;
     parts.push(
-      `Income of ${formatTotals(facts.income)} ran against ${formatTotals(facts.spend)} of spend.`,
+      `${ctx.scopeLabel} completed ${plural(facts.tasks.completed, "item")} ${period}` +
+        (wip > 0 ? `, with ${plural(wip, "item")} still in progress.` : "."),
     );
-  } else if (facts.spend.length) {
-    parts.push(`Spend totalled ${formatTotals(facts.spend)}.`);
-  } else if (facts.income.length) {
-    parts.push(`Income totalled ${formatTotals(facts.income)}.`);
+  } else if (facts.deliverables.length) {
+    parts.push(`${ctx.scopeLabel} delivered ${joinList(facts.deliverables, 2)} ${period}.`);
+  } else {
+    // Nothing was finished. Say so plainly rather than dressing activity up as
+    // achievement — where the work went is the honest answer.
+    const categories = categoryPhrase(facts);
+    parts.push(
+      `${ctx.scopeLabel} logged ${plural(facts.entryCount, "entry", "entries")} ${period} with nothing yet completed` +
+        (categories ? `, the work concentrated in ${categories}.` : "."),
+    );
   }
 
-  if (facts.tasks.completed > 0) {
-    const tail = facts.tasks.blocked > 0 ? `, with ${countWord(facts.tasks.blocked)} blocked` : "";
-    parts.push(`${plural(facts.tasks.completed, "item")} completed${tail}.`);
+  const cmp = ctx.comparison;
+  if (facts.income.length && facts.spend.length) {
+    parts.push(
+      `Income of ${formatTotals(facts.income)} ran against ${formatTotals(facts.spend)} of spend` +
+        `${comparisonClause(facts.spend, cmp?.spend)}.`,
+    );
+  } else if (facts.spend.length) {
+    parts.push(`Spend totalled ${withComparison(facts.spend, cmp?.spend)}.`);
+  } else if (facts.income.length) {
+    parts.push(`Income totalled ${withComparison(facts.income, cmp?.income)}.`);
+  }
+
+  if (facts.blockedItems.length > 0) {
+    parts.push(
+      `${plural(facts.blockedItems.length, "item")} ${facts.blockedItems.length === 1 ? "needs" : "need"} a decision before work continues.`,
+    );
   } else if (facts.tasks.blocked > 0) {
     parts.push(`${plural(facts.tasks.blocked, "item")} currently blocked.`);
   }
@@ -137,9 +166,8 @@ function progress(facts: BriefFacts): string {
   if (facts.deliverables.length) {
     parts.push(`Delivered: ${joinList(facts.deliverables, 3)}.`);
   }
-  if (blocked > 0 && facts.blockedItems.length) {
-    parts.push(`Blocked on ${joinList(facts.blockedItems, 2)}.`);
-  }
+  // Blockers are named once, in the decisions section. Listing them here as
+  // well was the same two sentences twice in a one-page document.
   if (facts.clients.length) {
     parts.push(`Client activity covered ${joinList(facts.clients, 3)}.`);
   }
@@ -147,18 +175,49 @@ function progress(facts: BriefFacts): string {
   return compose(parts);
 }
 
-function financials(facts: BriefFacts): string {
+/**
+ * ", down 31% from USD 6,100" — a trailing clause rather than a wrapper, so a
+ * caller can put it at the end of its sentence instead of in the middle. The
+ * wrapper form produced "ran against USD 2,827, down 31% from USD 4,100 of
+ * spend", which strands the noun the figure belongs to.
+ *
+ * Empty when there is nothing to compare against, so a first report reads
+ * normally rather than apologising for its own novelty.
+ */
+function comparisonClause(
+  totals: { currency: string; amount: number }[],
+  deltas: BriefComparison["spend"] | undefined,
+): string {
+  if (!deltas?.length || totals.length !== 1) return "";
+  const delta = deltas.find((d) => d.currency === totals[0].currency);
+  const phrase = delta ? changePhrase(delta.changePct) : null;
+  if (!delta || !phrase) return "";
+  return phrase === "level with"
+    ? ", level with the preceding period"
+    : `, ${phrase} ${formatAmount(delta.previous, delta.currency)}`;
+}
+
+/** The figure with its direction of travel, for use mid-sentence. */
+function withComparison(
+  totals: { currency: string; amount: number }[],
+  deltas: BriefComparison["spend"] | undefined,
+): string {
+  return formatTotals(totals) + comparisonClause(totals, deltas);
+}
+
+function financials(facts: BriefFacts, ctx: BriefContext): string {
   const parts: string[] = [];
+  const cmp = ctx.comparison;
 
   if (facts.spend.length) {
     const top = facts.spendByCategory[0];
     parts.push(
-      `Spend totalled ${formatTotals(facts.spend)}` +
+      `Spend totalled ${withComparison(facts.spend, cmp?.spend)}` +
         (top ? `, led by ${top.category}.` : "."),
     );
   }
   if (facts.income.length) {
-    parts.push(`Income totalled ${formatTotals(facts.income)}.`);
+    parts.push(`Income totalled ${withComparison(facts.income, cmp?.income)}.`);
   }
   if (facts.spend.length && facts.income.length && facts.net.length) {
     const negative = facts.net.every((n) => n.amount < 0);
@@ -173,15 +232,12 @@ function financials(facts: BriefFacts): string {
 }
 
 function nextSteps(facts: BriefFacts): string {
+  // Blocked items deliberately do not appear here: they belong to the
+  // decisions section, which is about what the reader has to do. Repeating
+  // them in both is what turns a call to action back into background noise.
   const parts: string[] = [];
-  const { open, inProgress, blocked } = facts.tasks;
+  const { open, inProgress } = facts.tasks;
 
-  if (blocked > 0) {
-    parts.push(
-      `${plural(blocked, "item")} blocked` +
-        (facts.blockedItems.length ? `: ${joinList(facts.blockedItems, 2)}.` : " and needing a decision."),
-    );
-  }
   if (open + inProgress > 0) {
     parts.push(
       `${plural(open + inProgress, "item")} outstanding` +
@@ -193,6 +249,24 @@ function nextSteps(facts: BriefFacts): string {
   }
 
   return compose(parts);
+}
+
+/** The most decisions to put in front of a reader before it stops being a list of asks. */
+export const MAX_DECISIONS = 3;
+
+function decisions(facts: BriefFacts): string {
+  const count = Math.min(facts.blockedItems.length, MAX_DECISIONS);
+  if (count === 0) return "";
+  const overflow = facts.blockedItems.length - count;
+  return sentenceCase(
+    `${plural(count, "item")} ${count === 1 ? "is" : "are"} held up pending a decision` +
+      (overflow > 0 ? `, of ${countWord(facts.blockedItems.length)} outstanding.` : "."),
+  );
+}
+
+/** The asks themselves, verbatim from the user's own entries. */
+export function decisionItems(facts: BriefFacts): string[] {
+  return facts.blockedItems.slice(0, MAX_DECISIONS).map(sentenceCase);
 }
 
 /** Factual prose for one section, with no model involvement. */
@@ -207,9 +281,11 @@ export function narrateSection(
     case "progress":
       return progress(facts);
     case "financials":
-      return financials(facts);
+      return financials(facts, ctx);
     case "next_steps":
       return nextSteps(facts);
+    case "decisions":
+      return decisions(facts);
   }
 }
 

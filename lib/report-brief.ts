@@ -5,12 +5,18 @@
 // prose, so a wrong figure can't be hallucinated into a client-facing document.
 
 import { entitiesOf, type Log, type LogEntity } from "./dashboard-utils";
+import { baseAmountOf, normalizeCurrency } from "./fx";
 
 export const SECTION_IDS = [
   "executive_summary",
   "progress",
   "financials",
   "next_steps",
+  // Last, and deliberately separate from Next Steps: that section is what the
+  // sender will do, this one is what the reader has to. Every study of client
+  // reporting says the single specific ask is the part that gets acted on, and
+  // it is the part most reports omit.
+  "decisions",
 ] as const;
 export type SectionId = (typeof SECTION_IDS)[number];
 
@@ -19,6 +25,7 @@ export const SECTION_TITLES: Record<SectionId, string> = {
   progress: "Progress",
   financials: "Financials",
   next_steps: "Next Steps",
+  decisions: "Needs Your Decision",
 };
 
 export type MoneyTotal = { currency: string; amount: number };
@@ -98,11 +105,22 @@ export function buildBriefFacts(logs: Log[], defaultCurrency = "USD"): BriefFact
     for (const entity of entitiesOf(log)) {
       pushUnique(clients, cleanText(entity.client, 60), 12);
 
-      const amount = typeof entity.amount === "number" && Number.isFinite(entity.amount)
-        ? entity.amount
-        : null;
+      // Prefer the converted figure so the report totals in one currency.
+      // baseAmountOf returns null when no rate was ever obtained for this
+      // entity, and then — and only then — the original currency survives into
+      // its own bucket. A second bucket in a report is a visible signal that a
+      // conversion is missing, which is the right failure: it is obvious rather
+      // than silently wrong.
+      const converted = baseAmountOf(entity, defaultCurrency);
+      const amount = converted !== null
+        ? converted
+        : typeof entity.amount === "number" && Number.isFinite(entity.amount)
+          ? entity.amount
+          : null;
       if (amount !== null && amount !== 0) {
-        const currency = currencyOf(entity, defaultCurrency);
+        const currency = converted !== null
+          ? normalizeCurrency(defaultCurrency) ?? UNKNOWN_CURRENCY
+          : currencyOf(entity, defaultCurrency);
         // Only expense/income entities move money. A task that happens to carry
         // a figure is a quote, not a transaction.
         if (entity.type === "expense") {
@@ -200,13 +218,91 @@ export function sectionHasSubstance(id: SectionId, facts: BriefFacts): boolean {
     case "next_steps":
       return (
         facts.openItems.length > 0 ||
-        facts.blockedItems.length > 0 ||
         facts.risks.length > 0 ||
-        facts.tasks.open + facts.tasks.inProgress + facts.tasks.blocked > 0
+        facts.tasks.open + facts.tasks.inProgress > 0
       );
+    // Only when there is a real, nameable thing waiting on the reader. An
+    // empty "Needs Your Decision" heading trains people to skip it.
+    case "decisions":
+      return facts.blockedItems.length > 0;
   }
 }
 
 export function activeSections(facts: BriefFacts): SectionId[] {
   return SECTION_IDS.filter((id) => sectionHasSubstance(id, facts));
+}
+
+// ---------------------------------------------------------------------------
+// Comparison against the preceding window
+//
+// A figure on its own is close to unreadable: "spend totalled USD 4,200" tells
+// a reader nothing without knowing it was USD 6,100 last month. Both windows
+// are the same length by construction, so the two are directly comparable.
+
+export type MoneyDelta = {
+  currency: string;
+  current: number;
+  previous: number;
+  /** Null when the previous window was zero — that is "new", not "up ∞%". */
+  changePct: number | null;
+};
+
+export type CountDelta = { current: number; previous: number; change: number };
+
+export type BriefComparison = {
+  /** Length of each window in days. Both are equal, which is what makes this fair. */
+  windowDays: number;
+  spend: MoneyDelta[];
+  income: MoneyDelta[];
+  completed: CountDelta;
+  /** Nothing at all in the preceding window — usually a first report. */
+  priorEmpty: boolean;
+};
+
+function moneyDeltas(current: MoneyTotal[], previous: MoneyTotal[]): MoneyDelta[] {
+  const prev = new Map(previous.map((t) => [t.currency, t.amount]));
+  const out: MoneyDelta[] = [];
+  for (const t of current) {
+    const before = prev.get(t.currency) ?? 0;
+    out.push({
+      currency: t.currency,
+      current: t.amount,
+      previous: before,
+      changePct: before === 0 ? null : Math.round(((t.amount - before) / Math.abs(before)) * 100),
+    });
+  }
+  return out;
+}
+
+/**
+ * Deltas between a report's window and the equal-length window before it.
+ *
+ * Currencies present only in the earlier window are left out: a report is about
+ * the period it covers, and "spend in a currency you no longer use is down
+ * 100%" is noise. Currencies new to this window come through with a null
+ * changePct, which the narrator reads as "new" rather than a percentage.
+ */
+export function compareFacts(
+  current: BriefFacts,
+  previous: BriefFacts,
+  windowDays: number,
+): BriefComparison {
+  return {
+    windowDays,
+    spend: moneyDeltas(current.spend, previous.spend),
+    income: moneyDeltas(current.income, previous.income),
+    completed: {
+      current: current.tasks.completed,
+      previous: previous.tasks.completed,
+      change: current.tasks.completed - previous.tasks.completed,
+    },
+    priorEmpty: previous.entryCount === 0,
+  };
+}
+
+/** "down 31%" / "up 12%" / "level with" — the phrase a sentence can absorb. */
+export function changePhrase(changePct: number | null): string | null {
+  if (changePct === null) return null;
+  if (changePct === 0) return "level with";
+  return `${changePct > 0 ? "up" : "down"} ${Math.abs(changePct)}% from`;
 }

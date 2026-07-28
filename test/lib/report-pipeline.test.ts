@@ -48,12 +48,13 @@ describe('report pipeline', () => {
   const facts = buildBriefFacts(WEEK);
   const brief = assembleBrief({ title: 'Weekly progress', facts, ctx, aiSections: null });
 
-  it('produces the four executive-brief sections in order', () => {
+  it('produces the executive-brief sections in order, ending on the ask', () => {
     expect(brief.sections.map((s) => s.title)).toEqual([
       'Executive Summary',
       'Progress',
       'Financials',
       'Next Steps',
+      'Needs Your Decision',
     ]);
   });
 
@@ -95,13 +96,31 @@ describe('report pipeline', () => {
     expect(financials.body).toContain('USD 6,319.25'); // net
   });
 
-  it('names what shipped and what is blocked', () => {
+  it('names what shipped, and separates what we will do from what they must', () => {
     const progress = brief.sections.find((s) => s.title === 'Progress')!;
     expect(progress.body).toContain('Brand guidelines');
 
     const next = brief.sections.find((s) => s.title === 'Next Steps')!;
-    expect(next.body).toContain('Printer contract');
     expect(next.body).toContain('Vendor unresponsive');
+    expect(next.body).not.toContain('Printer contract');
+
+    // The blocker becomes an ask, listed verbatim rather than buried in prose.
+    const decisions = brief.sections.find((s) => s.title === 'Needs Your Decision')!;
+    expect(decisions.items).toContain('Printer contract');
+    expect(decisions.source).toBe('facts');
+  });
+
+  it('never lets the model write the asks, however good its prose', () => {
+    // A blocker restated more diplomatically stops being a blocker.
+    const hijacked = assembleBrief({
+      title: 'Weekly progress',
+      facts,
+      ctx,
+      aiSections: { decisions: 'Everything is progressing smoothly and no action is required.' },
+    });
+    const decisions = hijacked.sections.find((s) => s.title === 'Needs Your Decision')!;
+    expect(decisions.source).toBe('facts');
+    expect(decisions.body).not.toContain('smoothly');
   });
 
   it('builds a financial table that reconciles with the prose', () => {
@@ -116,7 +135,8 @@ describe('report pipeline', () => {
   it('builds a stat strip within the four-item cap', () => {
     const stats = highlightStats(facts);
     expect(stats.length).toBeLessThanOrEqual(4);
-    expect(stats[0]).toEqual({ label: 'Income', value: 'USD 8,000' });
+    // Whether the period paid for itself, before the workings that got there.
+    expect(stats[0]).toEqual({ label: 'Net position', value: 'USD 6,319.25' });
   });
 
   it('still produces a full document when the model supplies prose', () => {

@@ -1,3 +1,5 @@
+import { baseAmountOf, normalizeCurrency } from "./fx";
+
 export function formatTimeAgo(timestamp: string | number | Date) {
   const diff = Date.now() - new Date(timestamp).getTime();
   if (diff < 60000) return "just now";
@@ -32,6 +34,13 @@ export type LogEntity = {
   date_reference: string | null;
   amount: number | null;
   currency: string | null;
+  // Conversion to the user's default currency, added at ingest. See lib/fx.ts —
+  // `amount`/`currency` remain whatever the user said, always.
+  base_amount?: number | null;
+  base_currency?: string | null;
+  fx_rate?: number | null;
+  fx_date?: string | null;
+  fx_source?: string | null;
   client: string | null;
   project: string | null;
   task: string | null;
@@ -136,18 +145,41 @@ export function logClients(log: Log): string[] {
   return seen;
 }
 
-export function logAmount(log: Log): { amount: number; currency: string | null } | null {
-  let total = 0;
-  let currency: string | null = null;
-  let found = false;
+/**
+ * The money on a log, as one figure.
+ *
+ * Only amounts that share a currency are ever added together. Given a base
+ * currency it totals converted amounts (lib/fx.ts), which is how a log holding
+ * ZAR and USD becomes a single honest number. Without one — or for an entity
+ * no rate could be found for — it falls back to the currency of the first
+ * amount and skips the rest, rather than adding unlike units.
+ *
+ * `partial` says some money on this log was left out, so a caller can mark the
+ * figure rather than present it as the whole.
+ */
+export function logAmount(
+  log: Log,
+  baseCurrency?: string | null,
+): { amount: number; currency: string | null; partial: boolean } | null {
+  const amounts: { amount: number; currency: string | null }[] = [];
   for (const e of entitiesOf(log)) {
-    if (typeof e.amount === "number" && Number.isFinite(e.amount)) {
-      total += e.amount;
-      found = true;
-      if (!currency && e.currency) currency = e.currency;
-    }
+    if (typeof e.amount !== "number" || !Number.isFinite(e.amount)) continue;
+    const converted = baseCurrency ? baseAmountOf(e, baseCurrency) : null;
+    amounts.push(
+      converted !== null
+        ? { amount: converted, currency: baseCurrency ?? null }
+        : { amount: e.amount, currency: normalizeCurrency(e.currency) },
+    );
   }
-  return found ? { amount: total, currency } : null;
+  if (!amounts.length) return null;
+
+  const currency = amounts[0].currency;
+  const matching = amounts.filter((a) => a.currency === currency);
+  return {
+    amount: matching.reduce((sum, a) => sum + a.amount, 0),
+    currency,
+    partial: matching.length !== amounts.length,
+  };
 }
 
 export function logSentiment(log: Log): LogEntity["sentiment"] {

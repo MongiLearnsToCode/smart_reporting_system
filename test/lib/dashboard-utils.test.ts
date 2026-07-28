@@ -87,10 +87,33 @@ describe('log accessors', () => {
     expect(logClients(l)).toEqual(['Acme', 'Zenith']);
   });
 
-  it('logAmount sums amounts and takes the first currency', () => {
+  it('logAmount only ever adds amounts that share a currency', () => {
+    // 100 ZAR and an unlabelled 50 are not 150 of anything. Without a base
+    // currency to convert through, the unlabelled amount is left out and
+    // `partial` says so.
     const l = log({ entities: [entity({ amount: 100, currency: 'ZAR' }), entity({ amount: 50 }), entity({})] });
-    expect(logAmount(l)).toEqual({ amount: 150, currency: 'ZAR' });
+    expect(logAmount(l)).toEqual({ amount: 100, currency: 'ZAR', partial: true });
     expect(logAmount(log({ entities: [entity({})] }))).toBeNull();
+  });
+
+  it('logAmount totals across currencies once each amount has been converted', () => {
+    const l = log({
+      entities: [
+        entity({ amount: 512, currency: 'USD' }),
+        entity({
+          amount: 6500, currency: 'ZAR',
+          base_amount: 397.02, base_currency: 'USD', fx_rate: 0.06108, fx_date: '2026-07-09',
+        }),
+      ],
+    });
+    expect(logAmount(l, 'USD')).toEqual({ amount: 909.02, currency: 'USD', partial: false });
+  });
+
+  it('logAmount leaves out an amount no rate was found for, rather than adding unlike units', () => {
+    const l = log({
+      entities: [entity({ amount: 512, currency: 'USD' }), entity({ amount: 6500, currency: 'ZAR' })],
+    });
+    expect(logAmount(l, 'USD')).toEqual({ amount: 512, currency: 'USD', partial: true });
   });
 
   it('logSentiment/logUrgency read the primary entity', () => {

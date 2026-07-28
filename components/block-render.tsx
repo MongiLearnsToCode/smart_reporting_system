@@ -32,15 +32,28 @@ export const PANEL = 'flex h-full flex-col overflow-hidden rounded-xl border bor
 
 // The visual body of a block. Shared by the live canvas and the report capture
 // stage (spec §9) so an exported block looks exactly like it does on-canvas.
-export function BlockBody({ block, logs }: { block: ConvexBlockDoc; logs: Log[] }) {
+export function BlockBody({ block, logs, currency }: {
+  block: ConvexBlockDoc;
+  logs: Log[];
+  /** The user's default currency — every figure a block aggregates is stated in it. */
+  currency?: string | null;
+}) {
   const rows = logsForBlock(block, logs);
   const category = block.queryConfig?.category ?? '';
   const cat = getCat(category);
   const chartColor = getCatDetail(category).chart;
   switch (block.type) {
     case 'chart': {
+      // Only logs that actually moved money belong on a money chart. Plotting
+      // every log with `|| 0` drew a line through zeroes for notes and tasks,
+      // which is a shape the data never had.
       const data = rows
-        .map((l) => ({ date: new Date(l.timestamp).toLocaleDateString(), value: logAmount(l)?.amount || 0 }))
+        .map((l) => ({ log: l, money: logAmount(l, currency) }))
+        .filter((r): r is { log: Log; money: NonNullable<ReturnType<typeof logAmount>> } => r.money !== null)
+        .map((r) => ({
+          date: new Date(r.log.timestamp).toLocaleDateString(),
+          value: r.money.amount,
+        }))
         .reverse();
       return <ChartWidget title={block.title} data={data} color={chartColor} accentDot={cat.dot} />;
     }
@@ -54,7 +67,7 @@ export function BlockBody({ block, logs }: { block: ConvexBlockDoc; logs: Log[] 
       );
     case 'metric': {
       const last = rows[0];
-      const amount = last ? logAmount(last) : null;
+      const amount = last ? logAmount(last, currency) : null;
       return (
         <MetricCard
           title={block.title}

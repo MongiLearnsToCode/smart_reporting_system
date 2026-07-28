@@ -505,6 +505,7 @@ export default function CodexApp() {
             onViewSource={setSourceBlock}
             tier={tier}
             projectId={viewScope}
+            currency={(userSettings as Partial<UserSettings>).currency ?? null}
           />
         </main>
 

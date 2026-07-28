@@ -3,6 +3,8 @@ import { createAdminClient } from '@/utils/supabase/admin';
 import { NextRequest, NextResponse } from 'next/server';
 import { assertSameOrigin, requireCsrf, toErrorResponse } from '@/utils/api/guards';
 import { DEFAULT_SETTINGS, parseSettings } from '@/utils/api/validation';
+import { reconvertAllLogs } from '@/utils/api/fx-backfill';
+import { convexForUser } from '@/utils/convex/serverClient';
 
 // Settings live in auth.users.user_metadata.settings, not in the
 // public.user_settings table: the hosted database was created without table
@@ -28,9 +30,15 @@ export async function PUT(request: NextRequest) {
 
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
+    const { data: { session } } = await supabase.auth.getSession();
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
     const body = parseSettings(await request.json());
+    const previous = user.user_metadata?.settings;
+    const previousCurrency =
+      previous && typeof previous === 'object' && typeof (previous as Record<string, unknown>).currency === 'string'
+        ? ((previous as Record<string, unknown>).currency as string)
+        : DEFAULT_SETTINGS.currency;
     const admin = createAdminClient();
     // admin updateUserById merges user_metadata shallowly, so top-level keys
     // like full_name / avatar_url are preserved
@@ -42,7 +50,20 @@ export async function PUT(request: NextRequest) {
       console.error('Settings update failed:', error);
       return NextResponse.json({ error: 'Settings update failed' }, { status: 500 });
     }
-    return NextResponse.json({ settings: { ...body, user_id: user.id } });
+
+    // Changing the default currency invalidates every stored conversion — they
+    // all target the old currency. Re-derive them from the originals, which are
+    // never overwritten precisely so this is possible. Best-effort: a failure
+    // here leaves entries in their original currency, which the report handles.
+    let reconverted = 0;
+    if (session && body.currency !== previousCurrency) {
+      try {
+        reconverted = await reconvertAllLogs(convexForUser(session.access_token), body.currency);
+      } catch (fxError) {
+        console.error('currency backfill failed:', fxError);
+      }
+    }
+    return NextResponse.json({ settings: { ...body, user_id: user.id }, reconverted });
   } catch (error) {
     return toErrorResponse(error);
   }

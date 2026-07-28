@@ -6,7 +6,7 @@ import { convexForUser } from '@/utils/convex/serverClient';
 import { api } from '@/convex/_generated/api';
 import { parseConvexId, DEFAULT_SETTINGS } from '@/utils/api/validation';
 import { convexLogToLog, type ConvexLogDoc } from '@/utils/convex/adapters';
-import { buildBriefFacts, activeSections } from '@/lib/report-brief';
+import { buildBriefFacts, activeSections, compareFacts } from '@/lib/report-brief';
 import { buildSectionPrompt } from '@/lib/report-narrative';
 import { assembleBrief } from '@/lib/report-assemble';
 import { BUSINESS_SCOPE_LABEL } from '@/lib/dashboard-utils';
@@ -57,17 +57,25 @@ export async function POST(request: NextRequest) {
       scopeLabel = match.name;
     }
 
-    const since = Date.now() - days * 86400000;
+    const windowMs = days * 86400000;
+    const since = Date.now() - windowMs;
+    // The equal-length window immediately before this one. A figure with no
+    // prior to sit against is close to unreadable — "spend totalled USD 4,200"
+    // says nothing until you know it was USD 6,100 last month.
+    const priorSince = since - windowMs;
+
     // The generated doc type widens entity fields (every one is optional in the
     // validator); the adapter is the boundary that narrows them back.
-    const logs = docs
-      .map((doc) => convexLogToLog(doc as unknown as ConvexLogDoc))
-      .filter((l) => new Date(l.timestamp).getTime() >= since);
+    const all = docs.map((doc) => convexLogToLog(doc as unknown as ConvexLogDoc));
+    const at = (l: { timestamp: string | number | Date }) => new Date(l.timestamp).getTime();
+    const logs = all.filter((l) => at(l) >= since);
+    const priorLogs = all.filter((l) => at(l) >= priorSince && at(l) < since);
 
     const stored = user.user_metadata?.settings;
     const settings = { ...DEFAULT_SETTINGS, ...(stored && typeof stored === 'object' ? stored : {}) };
     const facts = buildBriefFacts(logs, settings.currency);
-    const ctx = { scopeLabel, periodLabel: periodLabel(days) };
+    const comparison = compareFacts(facts, buildBriefFacts(priorLogs, settings.currency), days);
+    const ctx = { scopeLabel, periodLabel: periodLabel(days), comparison };
     const ids = activeSections(facts);
 
     if (ids.length === 0) {

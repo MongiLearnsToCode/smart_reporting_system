@@ -97,8 +97,8 @@ export function ReportsModal({ onClose, projectId = null, onRequestScope }: {
         generatedAt: new Date(brief.generatedAt).toLocaleDateString(undefined, {
           day: "numeric", month: "long", year: "numeric",
         }),
-        sections: brief.sections.map((s) => ({ title: s.title, body: s.body })),
-        stats: highlightStats(brief.facts),
+        sections: brief.sections.map((s) => ({ title: s.title, body: s.body, items: s.items })),
+        stats: highlightStats(brief.facts, brief.comparison),
         // Chart or table, drawn natively — never a screenshot of the canvas.
         financials: financialVisual(brief.facts),
       });
