@@ -47,15 +47,23 @@ export function BlockBody({ block, logs, currency }: {
       // Only logs that actually moved money belong on a money chart. Plotting
       // every log with `|| 0` drew a line through zeroes for notes and tasks,
       // which is a shape the data never had.
-      const data = rows
-        .map((l) => ({ log: l, money: logAmount(l, currency) }))
-        .filter((r): r is { log: Log; money: NonNullable<ReturnType<typeof logAmount>> } => r.money !== null)
-        .map((r) => ({
-          date: new Date(r.log.timestamp).toLocaleDateString(),
-          value: r.money.amount,
-        }))
-        .reverse();
-      return <ChartWidget title={block.title} data={data} color={chartColor} accentDot={cat.dot} />;
+      //
+      // Real timestamps go through, not formatted dates: the chart buckets by
+      // period, and it can only do that if it still knows when things happened.
+      const points = rows
+        .map((l) => ({ ts: new Date(l.timestamp).getTime(), money: logAmount(l, currency) }))
+        .filter((r): r is { ts: number; money: NonNullable<ReturnType<typeof logAmount>> } => r.money !== null)
+        .map((r) => ({ ts: r.ts, value: r.money.amount }));
+      const chartCurrency = currency ?? rows.map((l) => logAmount(l)?.currency).find(Boolean) ?? null;
+      return (
+        <ChartWidget
+          title={block.title}
+          points={points}
+          currency={chartCurrency}
+          color={chartColor}
+          accentDot={cat.dot}
+        />
+      );
     }
     case 'list':
       return (
