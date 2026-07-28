@@ -31,6 +31,41 @@ export function useLogs(projectId?: string | null): { logs: Log[]; loading: bool
   };
 }
 
+/**
+ * Full-text search over the user's entries, scoped the same way the feed is.
+ *
+ * `"skip"` when there is no query, so an idle search box costs nothing — no
+ * subscription is opened until someone actually types. `loading` is false in
+ * that state rather than undefined-forever, so the caller can tell "not
+ * searching" apart from "searching, no answer yet".
+ */
+export function useLogSearch(
+  query: string,
+  projectId?: string | null,
+  category?: string | null,
+): { results: Log[]; loading: boolean; active: boolean } {
+  const text = query.trim();
+  const active = text.length > 0;
+  const docs = useConvexQuery(
+    api.logs.search,
+    active
+      ? {
+          query: text,
+          ...(projectId ? { projectId: projectId as never } : {}),
+          // Pushed into the index rather than filtered after: post-filtering
+          // would silently lose matches beyond the result cap.
+          ...(category ? { category } : {}),
+        }
+      : 'skip',
+  ) as unknown as ConvexLogDoc[] | undefined;
+
+  return {
+    results: docs ? docs.map(convexLogToLog) : [],
+    loading: active && docs === undefined,
+    active,
+  };
+}
+
 // Reactive project list. `loading` matters here: the composer must not fall back
 // to business-wide scope just because projects haven't arrived yet.
 export function useProjects(): { projects: Project[]; loading: boolean } {

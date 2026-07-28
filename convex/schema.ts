@@ -164,7 +164,19 @@ export default defineSchema({
     // project is deleted. Logs written before projects existed have no
     // projectId, so this index only ever answers `.eq(projectId, <an id>)`.
     .index('by_user_project', ['userId', 'projectId'])
-    .index('by_source', ['sourceId']),
+    .index('by_source', ['sourceId'])
+    // Full-text search over what the user actually wrote. Searching rawContent
+    // rather than the extracted entities is deliberate: the raw text is the
+    // record, and a user hunting for "the printer thing" is recalling their own
+    // words, not the model's structuring of them.
+    //
+    // userId is a filter field because it is a security boundary, not a
+    // convenience — a search index without it would happily return another
+    // user's entries.
+    .searchIndex('search_content', {
+      searchField: 'rawContent',
+      filterFields: ['userId', 'projectId', 'category'],
+    }),
 
   // Generated reports reference blocks by id, never copy content (spec §9).
   // The rendered PDF lives in Convex file storage; the doc points at it by

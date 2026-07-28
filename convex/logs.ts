@@ -279,6 +279,43 @@ export const setProject = mutation({
   },
 });
 
+// Full-text search over the user's own entries.
+//
+// Server-side rather than a client filter over the loaded list: the feed holds
+// every log in memory today, but that stops being true in the low thousands,
+// and search is the feature that would break first and most confusingly. The
+// index is authoritative from the start so behaviour doesn't change under the
+// user later.
+export const search = query({
+  args: {
+    query: v.string(),
+    projectId: v.optional(v.id('projects')),
+    category: v.optional(v.string()),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const userId = await optionalUserId(ctx);
+    if (!userId) return [];
+    const text = args.query.trim();
+    // A blank search is not a search. Returning everything here would make the
+    // empty input look like a filter that had silently applied.
+    if (!text) return [];
+
+    const limit = Math.min(Math.max(args.limit ?? 50, 1), 200);
+    return await ctx.db
+      .query('logs')
+      .withSearchIndex('search_content', (q) => {
+        let s = q.search('rawContent', text).eq('userId', userId);
+        // Only narrow by project when viewing one. Business-wide means every
+        // scope, including entries written before projects existed.
+        if (args.projectId !== undefined) s = s.eq('projectId', args.projectId);
+        if (args.category !== undefined) s = s.eq('category', args.category);
+        return s;
+      })
+      .take(limit);
+  },
+});
+
 // Rewrites the converted-currency fields on a batch of logs. Used only by the
 // currency-change backfill: the user picked a new default, so every stored
 // conversion now targets the wrong currency and has to be recomputed from the

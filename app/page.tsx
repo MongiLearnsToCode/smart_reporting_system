@@ -20,6 +20,8 @@ import {
   User,
   ScrollText,
   PinOff,
+  Search,
+  Loader2,
   LogOut, Sun, Moon,
   Settings,
   Wand2, Lock,
@@ -49,10 +51,11 @@ import { Composer } from "@/components/composer";
 import { BlockCanvas } from "@/components/block-canvas";
 import { getCat } from "@/lib/categories";
 import { uniqueClients, logClients, type Log, type UserSettings } from "@/lib/dashboard-utils";
+import { filterFeed, snapshotFor } from "@/lib/log-search";
 import { normalizeTier, tierAllows, upsellFor } from "@/lib/tiers";
 import { CanvasCommandModal } from "@/components/canvas-command-modal";
 import {
-  useBlocks, useLogs, useLogMutations,
+  useBlocks, useLogs, useLogSearch, useLogMutations,
   useProjects, useProjectMutations, useDefaultScope,
 } from "@/utils/convex/hooks";
 import type { ConvexBlockDoc } from "@/utils/convex/adapters";
@@ -73,6 +76,7 @@ export default function CodexApp() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [timeValue, setTimeValue] = useState(100);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
   const [selectedClient, setSelectedClient] = useState<string | null>(null);
   const [showReports, setShowReports] = useState(false);
   const [showCommand, setShowCommand] = useState(false);
@@ -296,11 +300,23 @@ export default function CodexApp() {
   const conflicts = allLogs.filter(function (l: Log) {
     return l.is_conflict;
   });
-  const filteredLogs = allLogs.filter(function (l: Log) {
-    if (selectedCategory && l.category !== selectedCategory) return false;
-    if (selectedClient && !logClients(l).includes(selectedClient)) return false;
-    return true;
-  });
+  // Search runs against the index rather than the loaded list, so it keeps
+  // working once the feed stops holding every entry in memory. Category and
+  // scope are pushed into the index; the rest are applied the same way to
+  // either source, and every predicate is idempotent so the doubled-up
+  // narrowing on search results is a no-op.
+  const { results: searchResults, loading: searching, active: searchActive } =
+    useLogSearch(searchQuery, viewScope, selectedCategory);
+  const filteredLogs = useMemo(
+    function () {
+      return filterFeed(searchActive ? searchResults : allLogs, {
+        category: selectedCategory,
+        client: selectedClient,
+        snapshotMs: snapshotFor(timeValue),
+      });
+    },
+    [searchActive, searchResults, allLogs, selectedCategory, selectedClient, timeValue],
+  );
   const uniqueCategories = Array.from(
     new Set(
       allLogs.map(function (l: Log) {
@@ -528,11 +544,12 @@ export default function CodexApp() {
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
-                  {selectedCategory || selectedClient ? (
+                  {selectedCategory || selectedClient || searchQuery ? (
                     <button
                       onClick={function () {
                         setSelectedCategory(null);
                         setSelectedClient(null);
+                        setSearchQuery("");
                       }}
                       className="flex items-center gap-1 text-[11px] font-medium text-zinc-500 hover:text-zinc-200 transition-colors"
                     >
@@ -548,6 +565,37 @@ export default function CodexApp() {
                   >
                     <PinOff size={14} />
                   </button>
+                </div>
+              </div>
+
+              <div className="border-b border-zinc-900 px-5 py-3">
+                <div className="relative">
+                  <Search
+                    size={12}
+                    className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-600"
+                  />
+                  <input
+                    type="search"
+                    value={searchQuery}
+                    onChange={function (e) { setSearchQuery(e.target.value); }}
+                    placeholder="Search your entries..."
+                    aria-label="Search entries"
+                    className="w-full rounded-lg border border-zinc-800 bg-zinc-900/60 py-1.5 pl-7 pr-7 text-[12px] text-zinc-100 placeholder:text-zinc-600 outline-none transition-colors focus:border-zinc-700 [&::-webkit-search-cancel-button]:appearance-none"
+                  />
+                  {searching ? (
+                    <Loader2
+                      size={12}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 animate-spin text-zinc-600"
+                    />
+                  ) : searchQuery ? (
+                    <button
+                      onClick={function () { setSearchQuery(""); }}
+                      aria-label="Clear search"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-600 transition-colors hover:text-zinc-300"
+                    >
+                      <X size={12} />
+                    </button>
+                  ) : null}
                 </div>
               </div>
 
@@ -606,16 +654,26 @@ export default function CodexApp() {
               ) : null}
 
               <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2 pb-36">
-                {filteredLogs.length === 0 ? (
+                {filteredLogs.length === 0 && !searching ? (
                   <div className="flex flex-col items-center justify-center py-16 text-zinc-700">
                     <MessageSquare size={32} strokeWidth={1} className="mb-3" />
                     <p className="text-xs font-medium text-center">
-                      {selectedCategory
-                        ? "No logs for " + selectedCategory
-                        : viewScope
-                          ? "No logs for " + scopeLabel(viewScope, projects) + " yet."
-                          : "No logs yet. Start by typing below."}
+                      {searchActive
+                        ? 'Nothing matches "' + searchQuery.trim() + '"'
+                        : selectedCategory
+                          ? "No logs for " + selectedCategory
+                          : viewScope
+                            ? "No logs for " + scopeLabel(viewScope, projects) + " yet."
+                            : "No logs yet. Start by typing below."}
                     </p>
+                    {/* A search that finds nothing inside a narrowed feed is
+                        usually the filter's doing, not the query's. */}
+                    {searchActive && (selectedCategory || selectedClient || viewScope) ? (
+                      <p className="mt-1.5 text-[11px] text-zinc-700">
+                        in {selectedCategory ?? scopeLabel(viewScope, projects)}
+                        {selectedClient ? " · " + selectedClient : ""}
+                      </p>
+                    ) : null}
                   </div>
                 ) : null}
                 <AnimatePresence initial={false}>
@@ -624,6 +682,7 @@ export default function CodexApp() {
                       <LogFeedItem
                         key={log.id}
                         log={log}
+                        highlight={searchActive ? searchQuery : undefined}
                         onClick={function () {
                           setPreviewLog(log);
                         }}

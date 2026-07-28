@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import GridLayout from 'react-grid-layout';
 import type { Layout } from 'react-grid-layout';
 import 'react-grid-layout/css/styles.css';
@@ -9,7 +9,7 @@ import { toast } from 'sonner';
 import {
   GripVertical, Pin, PinOff, EyeOff, Eye, Copy, Trash2, Pencil,
   FileText, FileX, ListPlus, Sparkles, Loader2, Repeat, Lock,
-  Hash, BarChart3, List, Clock, ScrollText, Check, Plus, X, LayoutGrid,
+  Hash, BarChart3, List, Clock, ScrollText, Check, Plus, X, LayoutGrid, Crosshair,
 } from 'lucide-react';
 import { logAmount, type Log } from '@/lib/dashboard-utils';
 import { getCat } from '@/lib/categories';
@@ -185,6 +185,30 @@ export function BlockCanvas({
     if (updates.length) m.updateLayout({ updates });
   }
 
+  // Jump-to-block. The canvas became unbounded, so a block can now sit past the
+  // fold where nothing on screen hints it exists. This is a "go to", not a
+  // search: with a handful of titled blocks, all of them visible in one list is
+  // faster than typing, and it doubles as the index of what the canvas holds.
+  const [indexOpen, setIndexOpen] = useState(false);
+  const [flashId, setFlashId] = useState<string | null>(null);
+  const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => { if (flashTimer.current) clearTimeout(flashTimer.current); }, []);
+
+  function jumpTo(id: string) {
+    setIndexOpen(false);
+    const el = document.querySelector<HTMLElement>(`[data-block-id="${id}"]`);
+    // scrollIntoView walks every scrollable ancestor, which is what this needs:
+    // the block may be off-screen horizontally in the canvas wrapper and
+    // vertically in the page at the same time.
+    el?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+    // Arriving somewhere on a canvas of similar-looking panels needs a target;
+    // without the flash you land near the block and still have to find it.
+    setFlashId(id);
+    if (flashTimer.current) clearTimeout(flashTimer.current);
+    flashTimer.current = setTimeout(() => setFlashId(null), 1400);
+  }
+
   // Straighten the canvas: repack into the base width, gaps closed, sizes kept.
   // Undo restores every cell we touched, so a stray click is cheap to reverse.
   function arrange() {
@@ -282,6 +306,39 @@ export function BlockCanvas({
               Canvas extends {beyondFold} column{beyondFold === 1 ? '' : 's'} past the fold — scroll right
             </span>
           ) : null}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setIndexOpen((open) => !open)}
+              aria-expanded={indexOpen}
+              title="Jump to a block, including any parked past the fold"
+              className="flex items-center gap-1.5 rounded-full border border-zinc-800 bg-zinc-950/60 px-3 py-1 text-[11px] font-medium text-zinc-400 transition-colors hover:border-zinc-700 hover:text-zinc-100"
+            >
+              <Crosshair size={12} /> Go to block
+              <span className="text-zinc-600">{visible.length}</span>
+            </button>
+            {indexOpen ? (
+              <>
+                {/* Click-away, behind the menu but above the canvas. */}
+                <div className="fixed inset-0 z-30" onClick={() => setIndexOpen(false)} />
+                <div className="absolute right-0 z-40 mt-1 max-h-72 w-60 overflow-y-auto rounded-xl border border-zinc-800 bg-zinc-950 p-1 shadow-xl">
+                  {visible.map((b) => (
+                    <button
+                      key={b._id}
+                      type="button"
+                      onClick={() => jumpTo(b._id)}
+                      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[12px] text-zinc-300 transition-colors hover:bg-zinc-900 hover:text-white"
+                    >
+                      <span className={'h-1.5 w-1.5 shrink-0 rounded-full ' + getCat(b.queryConfig?.category ?? '').dot} />
+                      <span className="truncate">{b.title}</span>
+                      {b.pinned ? <Pin size={10} className="ml-auto shrink-0 text-amber-400" /> : null}
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : null}
+          </div>
+
           <button
             type="button"
             onClick={arrange}
@@ -318,7 +375,14 @@ export function BlockCanvas({
         compactType={null}
       >
         {visible.map((block) => (
-          <div key={block._id} className="group relative overflow-hidden">
+          <div
+            key={block._id}
+            data-block-id={block._id}
+            className={
+              'group relative overflow-hidden rounded-xl transition-shadow ' +
+              (flashId === block._id ? 'ring-2 ring-blue-500/70' : '')
+            }
+          >
             {/* Drag handle (spec §4 move) */}
             {!block.pinned ? (
               <div className="block-drag-handle absolute left-2 top-2 z-20 hidden cursor-move rounded-md bg-zinc-800/80 p-1 text-zinc-500 group-hover:block hover:text-zinc-200">

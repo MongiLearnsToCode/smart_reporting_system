@@ -4,16 +4,20 @@ import { motion } from "framer-motion";
 import { FileText, AlertTriangle, ChevronRight } from "lucide-react";
 import { getCat } from "@/lib/categories";
 import { formatTimeAgo, logAmount, logClients, logSentiment, logUrgency, type Log } from "@/lib/dashboard-utils";
+import { highlightParts, previewFor } from "@/lib/log-search";
 
-export function LogFeedItem({ log, onClick }: {
+export function LogFeedItem({ log, onClick, highlight }: {
   log: Log;
   onClick: () => void;
+  /** Active search query — matched terms are marked in the preview. */
+  highlight?: string;
 }) {
   const cat = getCat(log.category);
-  const preview =
-    log.raw_content && log.raw_content.length > 80
-      ? log.raw_content.slice(0, 80) + "…"
-      : log.raw_content;
+  // When searching, window the preview around the first match instead of always
+  // taking the opening 80 characters: on a long entry the match is usually not
+  // in the first line, and a result that doesn't show why it matched reads as
+  // a wrong result.
+  const preview = previewFor(log.raw_content ?? "", highlight);
   const timeAgo = formatTimeAgo(log.timestamp);
   const sentiment = logSentiment(log);
   const urgency = logUrgency(log);
@@ -59,7 +63,17 @@ export function LogFeedItem({ log, onClick }: {
         <span className="font-mono text-[10px] text-zinc-600">{timeAgo}</span>
       </div>
       <p className="text-xs text-zinc-400 leading-relaxed group-hover:text-zinc-300 transition-colors">
-        {preview}
+        {highlight
+          ? highlightParts(preview, highlight).map((part, i) =>
+              part.match ? (
+                <mark key={i} className="rounded-sm bg-amber-400/20 px-0.5 text-amber-200">
+                  {part.text}
+                </mark>
+              ) : (
+                <span key={i}>{part.text}</span>
+              ),
+            )
+          : preview}
       </p>
       {amount ? (
         <p className="mt-2 font-mono text-[13px] font-medium text-zinc-100">
