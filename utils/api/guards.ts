@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-const buckets = new Map<string, { count: number; resetAt: number }>();
-
 export function jsonError(message: string, status = 500) {
   return NextResponse.json({ error: message }, { status });
 }
@@ -63,59 +61,35 @@ export async function rateLimit(
   key: string,
   options: { limit: number; windowMs: number },
 ) {
-  const now = Date.now();
-
   const supabase = getAdminClient();
-  if (supabase) {
-    try {
-      const resetAt = new Date(now + options.windowMs).toISOString();
-      const { data, error } = await supabase
-        .from('rate_limits')
-        .upsert(
-          { key, count: 1, reset_at: resetAt },
-          { onConflict: 'key', ignoreDuplicates: true },
-        )
-        .select('count, reset_at')
-        .single();
-
-      if (!error && data) {
-        const dbResetAt = new Date(data.reset_at).getTime();
-        if (dbResetAt <= now) {
-          await supabase
-            .from('rate_limits')
-            .update({ count: 1, reset_at: resetAt })
-            .eq('key', key);
-          return;
-        }
-        if (data.count >= options.limit) {
-          throw new Response(JSON.stringify({ error: 'Too many requests' }), {
-            status: 429,
-            headers: { 'Content-Type': 'application/json' },
-          });
-        }
-        await supabase
-          .from('rate_limits')
-          .update({ count: data.count + 1 })
-          .eq('key', key);
-        return;
-      }
-    } catch (e) {
-      if (e instanceof Response) throw e;
-    }
+  if (!supabase) {
+    throw new Response(JSON.stringify({ error: 'Rate limiter unavailable' }), {
+      status: 503,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
 
-  const bucket = buckets.get(key);
-  if (!bucket || bucket.resetAt <= now) {
-    buckets.set(key, { count: 1, resetAt: now + options.windowMs });
-    return;
+  // The database function increments and checks in one transaction. A
+  // process-local fallback would reset on a cold start and let requests slip
+  // between Vercel instances, so an unavailable limiter fails closed instead.
+  const { data, error } = await supabase.rpc('consume_rate_limit', {
+    p_key: key,
+    p_limit: options.limit,
+    p_window_ms: options.windowMs,
+  });
+  const result = Array.isArray(data) ? data[0] as { allowed?: unknown } | undefined : undefined;
+  if (error || !result || typeof result.allowed !== 'boolean') {
+    throw new Response(JSON.stringify({ error: 'Rate limiter unavailable' }), {
+      status: 503,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
-  if (bucket.count >= options.limit) {
+  if (!result.allowed) {
     throw new Response(JSON.stringify({ error: 'Too many requests' }), {
       status: 429,
       headers: { 'Content-Type': 'application/json' },
     });
   }
-  bucket.count += 1;
 }
 
 export function toErrorResponse(error: unknown) {

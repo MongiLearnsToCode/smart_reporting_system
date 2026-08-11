@@ -1,6 +1,10 @@
 'use client';
 
-import { useQuery as useConvexQuery, useMutation as useConvexMutation } from 'convex/react';
+import {
+  usePaginatedQuery,
+  useQuery as useConvexQuery,
+  useMutation as useConvexMutation,
+} from 'convex/react';
 import { api } from '@/convex/_generated/api';
 import {
   convexLogToLog,
@@ -29,6 +33,38 @@ export function useLogs(projectId?: string | null): { logs: Log[]; loading: bool
   return {
     logs: docs ? docs.map(convexLogToLog) : [],
     loading: docs === undefined,
+  };
+}
+
+/**
+ * A page-at-a-time activity feed. This deliberately does not share the canvas
+ * subscription: the canvas has a bounded recent-data view while the feed can
+ * grow only when the person reading it asks for more history.
+ */
+export function usePaginatedLogs(
+  projectId?: string | null,
+  category?: string | null,
+): {
+  logs: Log[];
+  loading: boolean;
+  canLoadMore: boolean;
+  loadingMore: boolean;
+  loadMore: () => void;
+} {
+  const { results, status, loadMore } = usePaginatedQuery(
+    api.logs.listPage,
+    {
+      ...(projectId ? { projectId: projectId as never } : {}),
+      ...(category ? { category } : {}),
+    },
+    { initialNumItems: 50 },
+  );
+  return {
+    logs: (results as unknown as ConvexLogDoc[]).map(convexLogToLog),
+    loading: status === 'LoadingFirstPage',
+    canLoadMore: status === 'CanLoadMore',
+    loadingMore: status === 'LoadingMore',
+    loadMore: () => loadMore(50),
   };
 }
 

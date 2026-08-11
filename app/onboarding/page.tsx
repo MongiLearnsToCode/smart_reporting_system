@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import { logError } from "@/utils/logger";
 
 // Spec §6 work types — each maps to a starter-canvas preset in convex/blocks.ts.
 const OPTIONS = [
@@ -33,7 +34,7 @@ export default function Onboarding() {
       await seedStarter({ workType: option });
       window.location.href = "/"; // Use standard navigation
     } catch (error) {
-      console.error(error);
+      logError('onboarding.seed-starter', error);
       setLoading(false);
     }
   };

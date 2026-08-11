@@ -5,6 +5,7 @@ import { callGroq } from '@/utils/api/groq';
 import { convexForUser } from '@/utils/convex/serverClient';
 import { api } from '@/convex/_generated/api';
 import { parseConvexId } from '@/utils/api/validation';
+import { logError } from '@/utils/logger';
 
 // How many recent logs feed the narrative. Bounded so the prompt stays cheap
 // and the Groq call stays within the latency budget.
@@ -88,7 +89,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ summary: summary.trim(), summaryAt: Date.now() });
   } catch (error) {
-    console.error('api/blocks/summary error:', error);
+    logError('api.blocks.summary', error);
     return toErrorResponse(error);
   }
 }

@@ -208,12 +208,15 @@ export function PreferencesPanel() {
         <div className="space-y-2">
           <ToggleGroup
             type="single"
-            value={theme === 'light' ? 'light' : 'dark'}
-            onValueChange={(v: string) => { if (v) setTheme(v); }}
+            value={theme}
+            onValueChange={(v: string) => {
+              if (v === 'dark' || v === 'light' || v === 'system') setTheme(v);
+            }}
             className={groupClass}
           >
             <ToggleGroupItem value="dark" className={itemClass}>Dark</ToggleGroupItem>
             <ToggleGroupItem value="light" className={itemClass}>Light</ToggleGroupItem>
+            <ToggleGroupItem value="system" className={itemClass}>System</ToggleGroupItem>
           </ToggleGroup>
         </div>
       </SettingsSection>

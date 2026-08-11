@@ -10,6 +10,7 @@ import { ENTITY_TYPES, type LogEntity } from '@/lib/dashboard-utils';
 import { convertEntities } from '@/utils/api/fx-apply';
 import { convexForUser } from '@/utils/convex/serverClient';
 import { api } from '@/convex/_generated/api';
+import { logError } from '@/utils/logger';
 
 export async function POST(request: NextRequest) {
   try {
@@ -102,7 +103,7 @@ export async function POST(request: NextRequest) {
       ], model);
       entities = normalizeEntities(extractJson(aiResponse));
     } catch (extractionError) {
-      console.error('api/process extraction failed:', extractionError);
+      logError('api.process.extraction', extractionError);
     }
 
     // Failure path: save the log anyway so nothing is lost; the feed offers a retry.
@@ -188,7 +189,7 @@ Return: { "duplicate": boolean, "source_index": number | null, "reason": string 
         }
       } catch (conflictError) {
         // Extraction succeeded — a conflict-check failure must not fail the log.
-        console.error('api/process conflict check failed:', conflictError);
+        logError('api.process.conflict-check', conflictError);
       }
     }
 
@@ -211,7 +212,7 @@ Return: { "duplicate": boolean, "source_index": number | null, "reason": string 
 
     return NextResponse.json({ success: true, logId });
   } catch (error) {
-    console.error('api/process error:', error);
+    logError('api.process', error);
     if (error instanceof Error && /required|too long/.test(error.message)) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }

@@ -5,6 +5,7 @@ import { callGroq, extractJson } from '@/utils/api/groq';
 import { convexForUser } from '@/utils/convex/serverClient';
 import { api } from '@/convex/_generated/api';
 import { normalizeTier, tierAllows } from '@/lib/tiers';
+import { logError } from '@/utils/logger';
 
 const BLOCK_TYPES = ['metric', 'chart', 'list', 'timeline', 'summary', 'source_log'] as const;
 type BlockType = (typeof BLOCK_TYPES)[number];
@@ -126,7 +127,7 @@ export async function POST(request: NextRequest) {
       note: note || (applied ? `Applied ${applied} change${applied === 1 ? '' : 's'}.` : 'No changes matched that command.'),
     });
   } catch (error) {
-    console.error('api/canvas/command error:', error);
+    logError('api.canvas.command', error);
     return toErrorResponse(error);
   }
 }

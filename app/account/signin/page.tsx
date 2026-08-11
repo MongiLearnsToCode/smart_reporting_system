@@ -26,7 +26,7 @@ export default function SignInPage() {
     }
 
     try {
-      await (signInWithCredentials as any)({
+      await signInWithCredentials({
         email,
         password,
         callbackUrl: "/",

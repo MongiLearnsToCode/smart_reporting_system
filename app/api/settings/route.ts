@@ -5,6 +5,7 @@ import { assertSameOrigin, requireCsrf, toErrorResponse } from '@/utils/api/guar
 import { DEFAULT_SETTINGS, parseSettings } from '@/utils/api/validation';
 import { reconvertAllLogs } from '@/utils/api/fx-backfill';
 import { convexForUser } from '@/utils/convex/serverClient';
+import { logError } from '@/utils/logger';
 
 // Settings live in auth.users.user_metadata.settings, not in the
 // public.user_settings table: the hosted database was created without table
@@ -51,7 +52,7 @@ export async function PUT(request: NextRequest) {
     });
 
     if (error) {
-      console.error('Settings update failed:', error);
+      logError('api.settings.update', error);
       return NextResponse.json({ error: 'Settings update failed' }, { status: 500 });
     }
 
@@ -64,7 +65,7 @@ export async function PUT(request: NextRequest) {
       try {
         reconverted = await reconvertAllLogs(convexForUser(session.access_token), body.currency);
       } catch (fxError) {
-        console.error('currency backfill failed:', fxError);
+        logError('api.settings.currency-backfill', fxError);
       }
     }
     return NextResponse.json({ settings: { ...body, user_id: user.id }, reconverted });

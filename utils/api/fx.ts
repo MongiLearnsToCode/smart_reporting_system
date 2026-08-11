@@ -23,7 +23,7 @@ const TIMEOUT_MS = 6000;
 export const FX_SOURCE_ECB = 'ECB (frankfurter.dev)';
 export const FX_SOURCE_ERAPI = 'exchangerate-api.com';
 
-async function getJson(url: string): Promise<any | null> {
+async function getJson(url: string): Promise<unknown | null> {
   try {
     const res = await fetch(url, {
       signal: AbortSignal.timeout(TIMEOUT_MS),
@@ -44,22 +44,28 @@ function validRate(value: unknown): value is number {
 async function fromFrankfurter(from: string, to: string, date: string): Promise<FxQuote | null> {
   if (!isEcbPair(from, to)) return null;
   const data = await getJson(`${FRANKFURTER}/${date}?base=${from}&symbols=${to}`);
-  const rate = data?.rates?.[to];
+  const rates = isRecord(data) ? data.rates : null;
+  const rate = isRecord(rates) ? rates[to] : null;
   if (!validRate(rate)) return null;
   // Frankfurter answers a weekend or holiday with the previous publication
   // day and says so in `date`. Record what it returned, not what we asked for.
-  return { rate, rateDate: typeof data.date === 'string' ? data.date : date, source: FX_SOURCE_ECB };
+  return { rate, rateDate: isRecord(data) && typeof data.date === 'string' ? data.date : date, source: FX_SOURCE_ECB };
 }
 
 /** Latest rates, broad currency coverage. The quote's date is today's publication. */
 async function fromErApi(from: string, to: string): Promise<FxQuote | null> {
   const data = await getJson(`${ER_API}/${from}`);
-  const rate = data?.rates?.[to];
+  const rates = isRecord(data) ? data.rates : null;
+  const rate = isRecord(rates) ? rates[to] : null;
   if (!validRate(rate)) return null;
-  const stamp = typeof data.time_last_update_unix === 'number'
+  const stamp = isRecord(data) && typeof data.time_last_update_unix === 'number'
     ? isoDay(data.time_last_update_unix * 1000)
     : isoDay(new Date());
   return { rate, rateDate: stamp, source: FX_SOURCE_ERAPI };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
 }
 
 /**

@@ -1,6 +1,8 @@
-import { mutation, query } from './_generated/server';
+import { mutation, query, type MutationCtx } from './_generated/server';
+import { paginationOptsValidator } from 'convex/server';
 import { v } from 'convex/values';
 import { entityValidator } from './schema';
+import type { Doc } from './_generated/dataModel';
 import { requireUserId, optionalUserId } from './lib/identity';
 import { defaultLayoutFor, nextFreeRow } from './lib/layout';
 
@@ -30,7 +32,7 @@ export const list = query({
         .withIndex('by_user_project', (q) =>
           q.eq('userId', userId).eq('projectId', args.projectId),
         )
-        .collect();
+        .take(500);
       if (args.category) rows = rows.filter((r) => r.category === args.category);
       rows.sort((a, b) => b.timestamp - a.timestamp);
     } else if (args.category) {
@@ -39,18 +41,68 @@ export const list = query({
         .withIndex('by_user_category', (q) =>
           q.eq('userId', userId).eq('category', args.category),
         )
-        .collect();
+        .take(500);
     } else {
       rows = await ctx.db
         .query('logs')
         .withIndex('by_user_time', (q) => q.eq('userId', userId))
         .order('desc')
-        .collect();
+        .take(500);
     }
     if (args.sinceMs != null) {
       rows = rows.filter((r) => r.timestamp >= args.sinceMs!);
     }
     return rows;
+  },
+});
+
+// The activity feed is intentionally independent of the canvas subscription:
+// it grows on demand instead of asking every open dashboard to hold a user's
+// full history in memory.
+export const listPage = query({
+  args: {
+    paginationOpts: paginationOptsValidator,
+    category: v.optional(v.string()),
+    projectId: v.optional(v.id('projects')),
+  },
+  handler: async (ctx, args) => {
+    const userId = await optionalUserId(ctx);
+    if (!userId) {
+      return { page: [], isDone: true, continueCursor: '' };
+    }
+
+    if (args.projectId && args.category) {
+      return await ctx.db
+        .query('logs')
+        .withIndex('by_user_category_project_timestamp', (q) =>
+          q.eq('userId', userId).eq('category', args.category!).eq('projectId', args.projectId!),
+        )
+        .order('desc')
+        .paginate(args.paginationOpts);
+    }
+    if (args.projectId) {
+      return await ctx.db
+        .query('logs')
+        .withIndex('by_user_project_timestamp', (q) =>
+          q.eq('userId', userId).eq('projectId', args.projectId!),
+        )
+        .order('desc')
+        .paginate(args.paginationOpts);
+    }
+    if (args.category) {
+      return await ctx.db
+        .query('logs')
+        .withIndex('by_user_category_timestamp', (q) =>
+          q.eq('userId', userId).eq('category', args.category!),
+        )
+        .order('desc')
+        .paginate(args.paginationOpts);
+    }
+    return await ctx.db
+      .query('logs')
+      .withIndex('by_user_time', (q) => q.eq('userId', userId))
+      .order('desc')
+      .paginate(args.paginationOpts);
   },
 });
 
@@ -103,12 +155,13 @@ export const recentInCategory = query({
     const scope = projectId ?? null;
     const rows = await ctx.db
       .query('logs')
-      .withIndex('by_user_category', (q) => q.eq('userId', userId).eq('category', category))
-      .collect();
+      .withIndex('by_user_category_project_timestamp', (q) =>
+        q.eq('userId', userId).eq('category', category).eq('projectId', scope).gte('timestamp', sinceMs),
+      )
+      .order('desc')
+      .take(6);
     return rows
-      .filter((r) => (r.projectId ?? null) === scope)
-      .filter((r) => r.timestamp >= sinceMs && r._id !== excludeId)
-      .sort((a, b) => b.timestamp - a.timestamp)
+      .filter((r) => r._id !== excludeId)
       .slice(0, 5)
       .map((r) => ({ id: r._id, rawContent: r.rawContent }));
   },
@@ -123,13 +176,13 @@ function blockTypeForCategory(category: string): 'metric' | 'chart' | 'list' {
 }
 
 // Ensures a block exists for a category (spec §6 new-category detection).
-async function ensureCategoryBlock(ctx: any, userId: string, category: string) {
+async function ensureCategoryBlock(ctx: MutationCtx, userId: string, category: string) {
   const blocks = await ctx.db
     .query('canvasBlocks')
-    .withIndex('by_user', (q: any) => q.eq('userId', userId))
-    .collect();
+    .withIndex('by_user', (q) => q.eq('userId', userId))
+    .take(200);
   const has = blocks.some(
-    (b: any) => !b.deletedAt && b.queryConfig?.category === category,
+    (b: Doc<'canvasBlocks'>) => !b.deletedAt && b.queryConfig?.category === category,
   );
   if (has) return;
   const type = blockTypeForCategory(category);

@@ -57,12 +57,13 @@ import { filterFeed, snapshotFor } from "@/lib/log-search";
 import { tierAllows, upsellFor } from "@/lib/tiers";
 import { CanvasCommandModal } from "@/components/canvas-command-modal";
 import {
-  useBlocks, useLogs, useLogSearch, useLogMutations,
+  useBlocks, useLogs, usePaginatedLogs, useLogSearch, useLogMutations,
   useProjects, useProjectMutations, useDefaultScope, useEntitlement,
 } from "@/utils/convex/hooks";
 import type { ConvexBlockDoc } from "@/utils/convex/adapters";
 import { ReportsModal } from "@/components/reports-modal";
 import { ProjectScopePicker, scopeLabel } from "@/components/project-scope-picker";
+import { logError } from "@/utils/logger";
 
 export default function CodexApp() {
   const queryClient = useQueryClient();
@@ -70,7 +71,7 @@ export default function CodexApp() {
   const userResult = useUser();
 
   useEffect(function () { ensureCsrfToken(); }, []);
-  const user = userResult.data as import("@supabase/supabase-js").User | null;
+  const user = userResult.data;
   const userLoading = userResult.loading;
   const uploadHook = useUpload();
   const upload = uploadHook[0] as (input: { file: File }) => Promise<{ url: string; mimeType: string | null } | { error: string }>;
@@ -90,7 +91,7 @@ export default function CodexApp() {
   const [files, setFiles] = useState<File[]>([]);
   const abortRef = useRef<AbortController | null>(null);
   const [sourceBlock, setSourceBlock] = useState<ConvexBlockDoc | null>(null);
-  const { theme, setTheme } = useTheme();
+  const { theme, setTheme, resolvedTheme } = useTheme();
   const userMenuRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -150,6 +151,13 @@ export default function CodexApp() {
   // Convex is the reactive source for logs + blocks (spec §7). No manual
   // refetching — subscriptions push updates within the 2s SLA.
   const { logs: allLogsRaw } = useLogs(viewScope);
+  const {
+    logs: activityLogs,
+    loading: activityLogsLoading,
+    canLoadMore: hasMoreLogs,
+    loadingMore: isLoadingMore,
+    loadMore: loadMoreLogs,
+  } = usePaginatedLogs(viewScope, selectedCategory);
   const { blocks } = useBlocks();
   const logMutations = useLogMutations();
   const settingsQuery = useQuery({
@@ -175,12 +183,6 @@ export default function CodexApp() {
     [allLogsRaw, timeValue, retentionDays],
   );
 
-  // Pagination is obsolete under Convex reactivity; keep stubs so the feed JSX
-  // renders unchanged.
-  const hasMoreLogs = false;
-  const isLoadingMore = false;
-  function loadMoreLogs() {}
-
   const processMutation = useMutation({
     mutationFn: async function (payload: {
       rawContent: string;
@@ -205,7 +207,7 @@ export default function CodexApp() {
     // Convex reactivity updates the canvas + feed; no cache invalidation needed.
     onError: function (err) {
       if (err instanceof DOMException && err.name === "AbortError") return;
-      console.error("Process error:", err);
+      logError('dashboard.process-entry', err);
       toast.error(err instanceof Error ? err.message : "Processing failed");
     },
   });
@@ -300,14 +302,16 @@ export default function CodexApp() {
     function () {
       // Search is index-backed and can return logs outside the subscribed list,
       // so apply the same retention rule before the common feed filters.
-      const source = searchActive ? retainedLogs(searchResults, retentionDays) : allLogs;
+      const source = searchActive
+        ? retainedLogs(searchResults, retentionDays)
+        : retainedLogs(activityLogs, retentionDays);
       return filterFeed(source, {
         category: selectedCategory,
         client: selectedClient,
         snapshotMs: snapshotFor(timeValue),
       });
     },
-    [searchActive, searchResults, allLogs, retentionDays, selectedCategory, selectedClient, timeValue],
+    [searchActive, searchResults, activityLogs, retentionDays, selectedCategory, selectedClient, timeValue],
   );
   const uniqueCategories = Array.from(
     new Set(
@@ -450,10 +454,13 @@ export default function CodexApp() {
                     <CreditCard size={14} /> Billing
                   </Link>
                   <button
-                    onClick={function () { setTheme(theme === 'dark' ? 'light' : 'dark'); setShowUserMenu(false); }}
+                    onClick={function () {
+                      setTheme(theme === 'dark' ? 'light' : theme === 'light' ? 'system' : 'dark');
+                      setShowUserMenu(false);
+                    }}
                     className="flex w-full items-center gap-2.5 px-4 py-2.5 text-[13px] text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100 transition-colors"
                   >
-                    {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />} {theme === 'dark' ? 'Light' : 'Dark'} mode
+                    {resolvedTheme === 'dark' ? <Sun size={14} /> : <Moon size={14} />} Theme: {theme === 'system' ? 'System' : theme === 'dark' ? 'Dark' : 'Light'}
                   </button>
                   <button
                     onClick={async function () {
@@ -664,7 +671,7 @@ export default function CodexApp() {
               ) : null}
 
               <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2 pb-36">
-                {filteredLogs.length === 0 && !searching ? (
+                {filteredLogs.length === 0 && !searching && !activityLogsLoading ? (
                   <div className="flex flex-col items-center justify-center py-16 text-zinc-700">
                     <MessageSquare size={32} strokeWidth={1} className="mb-3" />
                     <p className="text-xs font-medium text-center">

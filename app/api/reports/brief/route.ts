@@ -11,6 +11,7 @@ import { buildSectionPrompt, parseSectionResponse } from '@/lib/report-narrative
 import { assembleBrief } from '@/lib/report-assemble';
 import { BUSINESS_SCOPE_LABEL } from '@/lib/dashboard-utils';
 import type { SectionId } from '@/lib/report-brief';
+import { logError } from '@/utils/logger';
 
 const MAX_DAYS = 365;
 
@@ -103,13 +104,13 @@ export async function POST(request: NextRequest) {
         }
       }
     } catch (error) {
-      console.error('api/reports/brief narration failed:', error);
+      logError('api.reports.brief.narration', error);
     }
 
     const brief = assembleBrief({ title, facts, ctx, aiSections });
     return NextResponse.json({ brief });
   } catch (error) {
-    console.error('api/reports/brief error:', error);
+    logError('api.reports.brief', error);
     return toErrorResponse(error);
   }
 }

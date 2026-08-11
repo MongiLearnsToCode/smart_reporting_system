@@ -169,10 +169,15 @@ export default defineSchema({
   })
     .index('by_user_time', ['userId', 'timestamp'])
     .index('by_user_category', ['userId', 'category'])
+    // These timestamped variants back the paginated activity feed. The older
+    // indexes remain for migration compatibility and targeted lookups.
+    .index('by_user_category_timestamp', ['userId', 'category', 'timestamp'])
     // Scoped reads for the project view, and the reassignment sweep when a
     // project is deleted. Logs written before projects existed have no
     // projectId, so this index only ever answers `.eq(projectId, <an id>)`.
     .index('by_user_project', ['userId', 'projectId'])
+    .index('by_user_project_timestamp', ['userId', 'projectId', 'timestamp'])
+    .index('by_user_category_project_timestamp', ['userId', 'category', 'projectId', 'timestamp'])
     .index('by_source', ['sourceId'])
     // Full-text search over what the user actually wrote. Searching rawContent
     // rather than the extracted entities is deliberate: the raw text is the

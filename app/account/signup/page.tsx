@@ -37,7 +37,7 @@ export default function SignUpPage() {
     }
 
     try {
-      const result = await (signUpWithCredentials as any)({
+      const result = await signUpWithCredentials({
         email,
         password,
         callbackUrl: "/",
