@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it, vi } from 'vitest';
 import { buildBriefFacts, activeSections } from '../../lib/report-brief';
 import {
   narrateSection, joinList, plural, buildSectionPrompt, sentenceCase,
@@ -25,6 +25,18 @@ function log(over: Partial<Log> = {}): Log {
 }
 
 const ctx = { scopeLabel: 'Acme Rebrand', periodLabel: 'This week' };
+
+// The fixtures carry fixed timestamps and the prose ages blockers against the
+// clock, so "open N days" grows by one every real day. Pinning `now` keeps the
+// assertions about the wording rather than about when the suite happens to run.
+//
+// Set at module scope, not in beforeAll: the fact fixtures below are built while
+// the describe blocks are being collected, which happens before any hook runs.
+vi.useFakeTimers({ shouldAdvanceTime: true });
+vi.setSystemTime(new Date('2026-07-28T10:00:00.000Z'));
+afterAll(() => {
+  vi.useRealTimers();
+});
 
 describe('plural', () => {
   it('agrees with the count', () => {

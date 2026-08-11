@@ -17,6 +17,7 @@ export type ReportPdfSection = { title: string; body: string; items?: string[] }
 
 export type ReportPdfInput = {
   title: string;
+  companyName: string;
   scopeLabel: string;
   periodLabel: string;
   generatedAt: string;
@@ -24,6 +25,7 @@ export type ReportPdfInput = {
   stats?: Stat[];
   /** Chart or table for the Financials section — chosen by financialVisual(). */
   financials?: FinancialVisual;
+  unconvertedTransactions?: number;
 };
 
 // One scale, so spacing stays proportional rather than ad hoc.
@@ -230,6 +232,12 @@ const styles = StyleSheet.create({
     color: MUTED,
     textAlign: 'center',
   },
+  financialNote: {
+    fontSize: 7.5,
+    lineHeight: 1.45,
+    color: MUTED,
+    marginTop: 10,
+  },
 });
 
 function FinancialsVisual({ visual }: { visual: FinancialVisual }) {
@@ -282,7 +290,7 @@ export async function buildReportPdf(input: ReportPdfInput): Promise<Blob> {
   const doc = (
     <Document title={input.title}>
       <Page size="A4" style={styles.page}>
-        <Text style={styles.brand}>CODEX</Text>
+        <Text style={styles.brand}>{input.companyName.toUpperCase()}</Text>
         <Text style={styles.title}>{input.title}</Text>
         <Text style={styles.meta}>
           {input.scopeLabel} · {input.periodLabel} · {input.generatedAt}
@@ -300,6 +308,15 @@ export async function buildReportPdf(input: ReportPdfInput): Promise<Blob> {
             ))}
           </View>
         )}
+
+        {(input.financials || input.unconvertedTransactions) ? (
+          <Text style={styles.financialNote}>
+            Financial values are approximate, converted to the report currency using available exchange rates.
+            {input.unconvertedTransactions
+              ? ` ${input.unconvertedTransactions} transaction${input.unconvertedTransactions === 1 ? '' : 's'} without an available rate ${input.unconvertedTransactions === 1 ? 'is' : 'are'} excluded.`
+              : ''}
+          </Text>
+        ) : null}
 
         {input.sections.map((section, i) => (
           // Sections are capped at four sentences, so one can never legitimately

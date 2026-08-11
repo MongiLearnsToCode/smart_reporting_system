@@ -41,12 +41,13 @@ describe('financialRows', () => {
     expect(financialRows(facts)).toEqual([{ label: 'Finance', value: 'USD 800' }]);
   });
 
-  it('shows multiple currencies within a category', () => {
+  it('keeps a category on one report currency scale', () => {
     const facts = buildBriefFacts([
       log({ category: 'Finance', entities: [entity({ type: 'expense', amount: 100, currency: 'USD' })] }),
       log({ category: 'Finance', entities: [entity({ type: 'expense', amount: 50, currency: 'ZAR' })] }),
     ]);
-    expect(financialRows(facts)[0].value).toBe('USD 100 · ZAR 50');
+    expect(financialRows(facts)[0].value).toBe('USD 100');
+    expect(facts.unconvertedTransactions).toBe(1);
   });
 
   it('returns nothing when no money moved', () => {
@@ -63,9 +64,9 @@ describe('highlightStats', () => {
     ]);
 
     expect(highlightStats(facts)).toEqual([
-      { label: 'Net position', value: 'USD 3,800' },
-      { label: 'Income', value: 'USD 5,000' },
-      { label: 'Spend', value: 'USD 1,200' },
+      { label: 'Approx. net position', value: 'USD 3,800' },
+      { label: 'Approx. income', value: 'USD 5,000' },
+      { label: 'Approx. spend', value: 'USD 1,200' },
       { label: 'Delivered', value: '1' },
     ]);
   });
@@ -81,7 +82,7 @@ describe('highlightStats', () => {
     // stat column the combined string wrapped as "USD 4,200 -" / "31%", which
     // reads as a negative amount.
     const stats = highlightStats(current, compareFacts(current, previous, 30));
-    const spend = stats.find((s) => s.label === 'Spend')!;
+    const spend = stats.find((s) => s.label === 'Approx. spend')!;
     expect(spend.value).toBe('USD 4,200');
     expect(spend.delta).toBe('-31%');
   });
@@ -91,7 +92,7 @@ describe('highlightStats', () => {
       log({ entities: [entity({ type: 'expense', amount: 4200, currency: 'USD' })] }),
     ]);
     const stats = highlightStats(current, compareFacts(current, buildBriefFacts([]), 30));
-    const spend = stats.find((s) => s.label === 'Spend')!;
+    const spend = stats.find((s) => s.label === 'Approx. spend')!;
     expect(spend.value).toBe('USD 4,200');
     expect(spend.delta).toBeUndefined();
   });
@@ -106,7 +107,7 @@ describe('highlightStats', () => {
       log({ entities: [entity({ type: 'expense', amount: 6100, currency: 'USD' })] }),
     ]);
     const delta = highlightStats(current, compareFacts(current, previous, 30))
-      .find((s) => s.label === 'Spend')!.delta!;
+      .find((s) => s.label === 'Approx. spend')!.delta!;
     expect(delta).toMatch(/^[\x20-\x7e]+$/);
   });
 

@@ -39,6 +39,12 @@ export type BriefFacts = {
   spend: MoneyTotal[];
   income: MoneyTotal[];
   net: MoneyTotal[];
+  /**
+   * Transactions omitted from the financial totals because no exchange rate
+   * was available to express them in the report currency. Keeping these out
+   * is more honest than presenting a false one-to-one conversion.
+   */
+  unconvertedTransactions: number;
   /** Spend broken out by category, for the financials table. */
   spendByCategory: { category: string; totals: MoneyTotal[] }[];
   tasks: { completed: number; inProgress: number; open: number; blocked: number };
@@ -109,6 +115,7 @@ export function buildBriefFacts(logs: Log[], defaultCurrency = "USD"): BriefFact
   const spend = new Map<string, number>();
   const income = new Map<string, number>();
   const spendByCategory = new Map<string, Map<string, number>>();
+  let unconvertedTransactions = 0;
   const tasks = { completed: 0, inProgress: 0, open: 0, blocked: 0 };
   const deliverables: string[] = [];
   const risks: string[] = [];
@@ -126,22 +133,27 @@ export function buildBriefFacts(logs: Log[], defaultCurrency = "USD"): BriefFact
     for (const entity of entitiesOf(log)) {
       pushUnique(clients, cleanText(entity.client, 60), 12);
 
-      // Prefer the converted figure so the report totals in one currency.
-      // baseAmountOf returns null when no rate was ever obtained for this
-      // entity, and then — and only then — the original currency survives into
-      // its own bucket. A second bucket in a report is a visible signal that a
-      // conversion is missing, which is the right failure: it is obvious rather
-      // than silently wrong.
+      // A report needs one intelligible financial scale. Prefer the stored
+      // conversion to the account currency; when a foreign-currency item has
+      // no rate, omit it from the aggregate instead of pretending it converts
+      // one-to-one. The PDF names this as an approximation and discloses the
+      // omitted-item count.
       const converted = baseAmountOf(entity, defaultCurrency);
-      const amount = converted !== null
-        ? converted
-        : typeof entity.amount === "number" && Number.isFinite(entity.amount)
-          ? entity.amount
-          : null;
+      const originalAmount = typeof entity.amount === "number" && Number.isFinite(entity.amount)
+        ? entity.amount
+        : null;
+      const originalCurrency = currencyOf(entity, defaultCurrency);
+      const amount = converted;
+      if (
+        amount === null &&
+        originalAmount !== null &&
+        originalCurrency !== (normalizeCurrency(defaultCurrency) ?? UNKNOWN_CURRENCY) &&
+        (entity.type === "expense" || entity.type === "income")
+      ) {
+        unconvertedTransactions++;
+      }
       if (amount !== null && amount !== 0) {
-        const currency = converted !== null
-          ? normalizeCurrency(defaultCurrency) ?? UNKNOWN_CURRENCY
-          : currencyOf(entity, defaultCurrency);
+        const currency = normalizeCurrency(defaultCurrency) ?? UNKNOWN_CURRENCY;
         // Only expense/income entities move money. A task that happens to carry
         // a figure is a quote, not a transaction.
         if (entity.type === "expense") {
@@ -242,6 +254,7 @@ export function buildBriefFacts(logs: Log[], defaultCurrency = "USD"): BriefFact
     spend: toTotals(spend),
     income: toTotals(income),
     net: toTotals(net),
+    unconvertedTransactions,
     spendByCategory: Array.from(spendByCategory, ([category, totals]) => ({
       category,
       totals: toTotals(totals),
@@ -438,7 +451,7 @@ export function isBriefFacts(value: unknown): value is BriefFacts {
     typeof tasks.open !== "number" || typeof tasks.blocked !== "number"
   ) return false;
 
-  if (typeof f.entryCount !== "number") return false;
+  if (typeof f.entryCount !== "number" || typeof f.unconvertedTransactions !== "number") return false;
   for (const key of ["deliverables", "blockedItems"]) {
     if (!Array.isArray(f[key])) return false;
   }

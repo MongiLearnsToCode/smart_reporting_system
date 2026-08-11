@@ -9,6 +9,7 @@ import {
   type ConvexProjectDoc,
 } from './adapters';
 import type { Log, Project } from '@/lib/dashboard-utils';
+import { normalizeTier, type Tier } from '@/lib/tiers';
 
 // Reactive blocks feed (spec §7). Returns raw Convex block docs — the canvas
 // needs layout/visible/pinned/includeInReports, not just the adapted Widget.
@@ -81,6 +82,36 @@ export function useReportDraft(projectId: string | null, range: number) {
   const save = useConvexMutation(api.reportDrafts.save);
   const discard = useConvexMutation(api.reportDrafts.remove);
   return { draft: draft ?? null, loading: draft === undefined, save, discard };
+}
+
+/**
+ * What the signed-in user's subscription entitles them to.
+ *
+ * Read-only by construction: there is no matching mutation, because the plan is
+ * derived from a Polar subscription that only the signed webhook can create.
+ * While the query is in flight this reports `free`, so a locked feature never
+ * flashes unlocked before the answer arrives — the UI degrades toward less
+ * access, never toward more.
+ */
+export function useEntitlement(): {
+  tier: Tier;
+  status: string | null;
+  productKey: string | null;
+  subscriptionId: string | null;
+  currentPeriodEnd: string | null;
+  cancelAtPeriodEnd: boolean;
+  loading: boolean;
+} {
+  const result = useConvexQuery(api.billing.entitlement, {});
+  return {
+    tier: normalizeTier(result?.tier),
+    status: result?.status ?? null,
+    productKey: result?.productKey ?? null,
+    subscriptionId: result?.subscriptionId ?? null,
+    currentPeriodEnd: result?.currentPeriodEnd ?? null,
+    cancelAtPeriodEnd: result?.cancelAtPeriodEnd ?? false,
+    loading: result === undefined,
+  };
 }
 
 // Reactive project list. `loading` matters here: the composer must not fall back

@@ -26,7 +26,10 @@ import {
   Settings,
   Wand2, Lock,
   FolderOpen,
+  CreditCard,
 } from "lucide-react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   LineChart,
@@ -46,17 +49,16 @@ import { useTheme } from "next-themes";
 import { csrfFetch, ensureCsrfToken } from "@/utils/api/csrf";
 import { LogPreviewModal } from "@/components/log-preview-modal";
 import { LogFeedItem } from "@/components/log-feed-item";
-import { SettingsModal } from "@/components/settings-modal";
 import { Composer } from "@/components/composer";
 import { BlockCanvas } from "@/components/block-canvas";
 import { getCat } from "@/lib/categories";
 import { uniqueClients, logClients, type Log, type UserSettings } from "@/lib/dashboard-utils";
 import { filterFeed, snapshotFor } from "@/lib/log-search";
-import { normalizeTier, tierAllows, upsellFor } from "@/lib/tiers";
+import { tierAllows, upsellFor } from "@/lib/tiers";
 import { CanvasCommandModal } from "@/components/canvas-command-modal";
 import {
   useBlocks, useLogs, useLogSearch, useLogMutations,
-  useProjects, useProjectMutations, useDefaultScope,
+  useProjects, useProjectMutations, useDefaultScope, useEntitlement,
 } from "@/utils/convex/hooks";
 import type { ConvexBlockDoc } from "@/utils/convex/adapters";
 import { ReportsModal } from "@/components/reports-modal";
@@ -64,6 +66,7 @@ import { ProjectScopePicker, scopeLabel } from "@/components/project-scope-picke
 
 export default function CodexApp() {
   const queryClient = useQueryClient();
+  const router = useRouter();
   const userResult = useUser();
 
   useEffect(function () { ensureCsrfToken(); }, []);
@@ -87,7 +90,6 @@ export default function CodexApp() {
   const [files, setFiles] = useState<File[]>([]);
   const abortRef = useRef<AbortController | null>(null);
   const [sourceBlock, setSourceBlock] = useState<ConvexBlockDoc | null>(null);
-  const [showSettings, setShowSettings] = useState(false);
   const { theme, setTheme } = useTheme();
   const userMenuRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -176,22 +178,6 @@ export default function CodexApp() {
     },
   });
 
-  const settingsMutation = useMutation({
-    mutationFn: async function (payload: Partial<UserSettings>) {
-      const res = await csrfFetch("/api/settings", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to save settings");
-      return data;
-    },
-    onSuccess: function (data: { settings?: UserSettings }) {
-      queryClient.setQueryData(["settings"], data);
-    },
-  });
-
   const processMutation = useMutation({
     mutationFn: async function (payload: {
       rawContent: string;
@@ -222,7 +208,8 @@ export default function CodexApp() {
   });
 
   const userSettings = (settingsQuery.data && settingsQuery.data.settings) || {};
-  const tier = normalizeTier((userSettings as Partial<UserSettings>).tier);
+  // Not a setting — see convex/billing.ts. Comes from the subscription.
+  const { tier } = useEntitlement();
 
   function handleFilesAdded(newFiles: File[]) {
     setFiles(function (prev) { return [...prev, ...newFiles]; });
@@ -394,7 +381,12 @@ export default function CodexApp() {
           <button
             onClick={function () {
               if (tierAllows(tier, "nlCommands")) setShowCommand(true);
-              else toast(upsellFor("nlCommands"), { description: "Upgrade to Pro to reshape your canvas with plain-language commands." });
+              // An upsell that names a plan should be able to reach it — the
+              // toast used to be a dead end.
+              else toast(upsellFor("nlCommands"), {
+                description: "Upgrade to Pro to reshape your canvas with plain-language commands.",
+                action: { label: "See plans", onClick: function () { router.push("/settings/billing"); } },
+              });
             }}
             title={tierAllows(tier, "nlCommands") ? "Canvas command" : upsellFor("nlCommands")}
             className="hidden sm:flex h-8 items-center gap-2 rounded-md border border-zinc-800 bg-zinc-900 px-3 text-xs font-medium text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-200"
@@ -426,21 +418,32 @@ export default function CodexApp() {
                   exit={{ opacity: 0, y: 6, scale: 0.96 }}
                   className="absolute right-0 top-10 z-50 w-56 rounded-lg border border-zinc-800 bg-zinc-950 shadow-2xl overflow-hidden"
                 >
-                  <div className="px-4 py-3 border-b border-zinc-800/80">
+                  {/* The identity block is the way into Account — the one tab
+                      that is about the person rather than the app. */}
+                  <Link
+                    href="/settings/account"
+                    onClick={function () { setShowUserMenu(false); }}
+                    className="block border-b border-zinc-800/80 px-4 py-3 transition-colors hover:bg-zinc-900"
+                  >
                     {user?.user_metadata?.full_name ? (
                       <p className="text-[13px] font-semibold text-zinc-100 truncate">{user.user_metadata.full_name}</p>
                     ) : null}
                     <p className="text-xs text-zinc-500 truncate">{user?.email}</p>
-                  </div>
-                  <button
-                    onClick={function () {
-                      setShowUserMenu(false);
-                      setShowSettings(true);
-                    }}
+                  </Link>
+                  <Link
+                    href="/settings/preferences"
+                    onClick={function () { setShowUserMenu(false); }}
                     className="flex w-full items-center gap-2.5 px-4 py-2.5 text-[13px] text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100 transition-colors"
                   >
                     <Settings size={14} /> Settings
-                  </button>
+                  </Link>
+                  <Link
+                    href="/settings/billing"
+                    onClick={function () { setShowUserMenu(false); }}
+                    className="flex w-full items-center gap-2.5 px-4 py-2.5 text-[13px] text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100 transition-colors"
+                  >
+                    <CreditCard size={14} /> Billing
+                  </Link>
                   <button
                     onClick={function () { setTheme(theme === 'dark' ? 'light' : 'dark'); setShowUserMenu(false); }}
                     className="flex w-full items-center gap-2.5 px-4 py-2.5 text-[13px] text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100 transition-colors"
@@ -928,24 +931,6 @@ export default function CodexApp() {
         <CanvasCommandModal onClose={function () { setShowCommand(false); }} />
       ) : null}
 
-      {showSettings ? (
-        <SettingsModal
-          settings={{
-            currency: "USD",
-            timezone: "UTC",
-            ai_language: "English",
-            conflict_detection: true,
-            conflict_dismiss_days: 7,
-            default_widget_sort: "title",
-            canvas_density: "comfortable",
-            data_retention_days: 90,
-            tier: "free",
-            ...userSettings,
-          }}
-          onSave={async (s: Partial<UserSettings>) => { await settingsMutation.mutateAsync(s); }}
-          onClose={() => setShowSettings(false)}
-        />
-      ) : null}
     </div>
   );
 }

@@ -39,13 +39,13 @@ export function highlightStats(facts: BriefFacts, comparison?: BriefComparison |
   // spend are the workings. A reader who only looks at the strip should come
   // away with the answer, not the inputs.
   if (facts.income.length && facts.spend.length && facts.net.length) {
-    stats.push({ label: "Net position", value: formatTotals(facts.net) });
+    stats.push({ label: "Approx. net position", value: formatTotals(facts.net) });
   }
   if (facts.income.length) {
-    stats.push({ label: "Income", value: formatTotals(facts.income), delta: deltaLabel(facts.income, comparison?.income) });
+    stats.push({ label: "Approx. income", value: formatTotals(facts.income), delta: deltaLabel(facts.income, comparison?.income) });
   }
   if (facts.spend.length) {
-    stats.push({ label: "Spend", value: formatTotals(facts.spend), delta: deltaLabel(facts.spend, comparison?.spend) });
+    stats.push({ label: "Approx. spend", value: formatTotals(facts.spend), delta: deltaLabel(facts.spend, comparison?.spend) });
   }
   if (stats.length < 4 && facts.deliverables.length > 0) {
     stats.push({ label: "Delivered", value: String(facts.deliverables.length) });

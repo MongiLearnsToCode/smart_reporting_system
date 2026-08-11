@@ -40,6 +40,7 @@ async function render(logs: Log[]) {
   const brief = assembleBrief({ title: 'Progress report', facts, ctx });
   const blob = await buildReportPdf({
     title: brief.title,
+    companyName: 'Acme Studio',
     scopeLabel: brief.scopeLabel,
     periodLabel: brief.periodLabel,
     generatedAt: '28 July 2026',

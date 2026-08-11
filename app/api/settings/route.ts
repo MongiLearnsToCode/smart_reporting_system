@@ -18,8 +18,12 @@ export async function GET() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+  // Read through the same whitelist as writes. Stored blobs outlive the code
+  // that wrote them: a value this build no longer offers (the old "Forever"
+  // retention, a since-removed `tier`) would otherwise reach the UI and render
+  // as an empty control with no way to tell what it was set to.
   const stored = user.user_metadata?.settings;
-  const settings = { ...DEFAULT_SETTINGS, ...(stored && typeof stored === 'object' ? stored : {}), user_id: user.id };
+  const settings = { ...parseSettings(stored), user_id: user.id };
   return NextResponse.json({ settings });
 }
 

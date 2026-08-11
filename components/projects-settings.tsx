@@ -16,9 +16,10 @@ import { useProjects, useProjectMutations, useDefaultScope } from "@/utils/conve
 import { ProjectScopePicker } from "@/components/project-scope-picker";
 import type { Project } from "@/lib/dashboard-utils";
 
-// Projects + default entry scope. Unlike the rest of Settings — which lives in
-// the Supabase user_metadata blob — these are Convex documents, so this section
-// talks to Convex directly instead of going through the settings form state.
+// Projects + default entry scope. These are Convex documents, not preferences,
+// so every control here writes immediately rather than waiting on a Save button.
+// That difference is why they have their own tab: sharing one with the
+// preferences form gave a single Save button two contradictory meanings.
 export function ProjectsSettings() {
   const { projects } = useProjects();
   const { defaultProjectId, setDefaultScope } = useDefaultScope();

@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import GridLayout from 'react-grid-layout';
 import type { Layout } from 'react-grid-layout';
 import 'react-grid-layout/css/styles.css';
@@ -58,6 +59,7 @@ export function BlockCanvas({
   projectId?: string | null;
 }) {
   const m = useBlockMutations();
+  const router = useRouter();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
   const [summarizingId, setSummarizingId] = useState<string | null>(null);
@@ -459,7 +461,12 @@ export function BlockCanvas({
                     title={canConvert ? 'Convert type' : upsellFor('convert')}
                     onClick={() => {
                       if (canConvert) setConvertId(block._id);
-                      else toast(upsellFor('convert'), { description: 'Upgrade to unlock block-to-block conversion.' });
+                      // Reachable upsell: the toast links to the plans rather
+                      // than naming one and leaving the user to find it.
+                      else toast(upsellFor('convert'), {
+                        description: 'Upgrade to unlock block-to-block conversion.',
+                        action: { label: 'See plans', onClick: () => router.push('/settings/billing') },
+                      });
                     }}
                   >
                     {canConvert ? <Repeat size={12} /> : <Lock size={12} />}

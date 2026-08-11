@@ -137,7 +137,7 @@ describe('report pipeline', () => {
     const stats = highlightStats(facts);
     expect(stats.length).toBeLessThanOrEqual(4);
     // Whether the period paid for itself, before the workings that got there.
-    expect(stats[0]).toEqual({ label: 'Net position', value: 'USD 6,319.25' });
+    expect(stats[0]).toEqual({ label: 'Approx. net position', value: 'USD 6,319.25' });
   });
 
   it('still produces a full document when the model supplies prose', () => {

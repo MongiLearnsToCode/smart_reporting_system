@@ -70,7 +70,7 @@ describe('buildBriefFacts', () => {
     expect(facts.entryCount).toBe(1);
   });
 
-  it('totals spend and income separately, grouped by currency', () => {
+  it('totals financials in the report currency and discloses missing conversions', () => {
     const facts = buildBriefFacts([
       log({ entities: [entity({ type: 'expense', amount: 1200, currency: 'USD' })] }),
       log({ entities: [entity({ type: 'expense', amount: 300.5, currency: 'USD' })] }),
@@ -78,12 +78,10 @@ describe('buildBriefFacts', () => {
       log({ entities: [entity({ type: 'income', amount: 5000, currency: 'USD' })] }),
     ]);
 
-    expect(facts.spend).toEqual([
-      { currency: 'USD', amount: 1500.5 },
-      { currency: 'ZAR', amount: 900 },
-    ]);
+    expect(facts.spend).toEqual([{ currency: 'USD', amount: 1500.5 }]);
     expect(facts.income).toEqual([{ currency: 'USD', amount: 5000 }]);
-    expect(facts.net).toEqual([{ currency: 'USD', amount: 3499.5 }, { currency: 'ZAR', amount: -900 }]);
+    expect(facts.net).toEqual([{ currency: 'USD', amount: 3499.5 }]);
+    expect(facts.unconvertedTransactions).toBe(1);
   });
 
   it('labels uncurrencied amounts with the account default', () => {

@@ -15,6 +15,7 @@ import { useProjects, useReportDraft } from "@/utils/convex/hooks";
 import { scopeLabel } from "@/components/project-scope-picker";
 import { resolveRegenerationScope } from "@/lib/report-scope";
 import { csrfFetch } from "@/utils/api/csrf";
+import { createClient } from "@/utils/supabase/client";
 import { highlightStats } from "@/lib/report-tables";
 import { financialVisual } from "@/lib/report-chart";
 import type { Brief, BriefSection } from "@/lib/report-assemble";
@@ -71,6 +72,16 @@ export function ReportsModal({ onClose, projectId = null, onRequestScope }: {
   // Facts and deltas the stat strip and chart are rendered from. Carried on
   // the draft so a restored one exports without regenerating.
   const [factsFor, setFactsFor] = useState<{ facts: Brief["facts"]; comparison: Brief["comparison"] } | null>(null);
+  const [companyName, setCompanyName] = useState("Your company");
+
+  useEffect(() => {
+    const supabase = createClient();
+    void supabase.auth.getUser().then(({ data }) => {
+      const metadata = data.user?.user_metadata;
+      const name = metadata?.company_name ?? metadata?.full_name;
+      if (typeof name === "string" && name.trim()) setCompanyName(name.trim());
+    });
+  }, []);
 
   const { draft: saved, loading: draftLoading, save: saveDraft, discard: discardDraft } =
     useReportDraft(projectId ?? null, days);
@@ -217,6 +228,7 @@ export function ReportsModal({ onClose, projectId = null, onRequestScope }: {
       const { buildReportPdf } = await import("@/utils/report-pdf");
       const blob = await buildReportPdf({
         title: title.trim() || "Progress report",
+        companyName,
         // The PDF leaves the app, so it has to say which scope it covers on its
         // own — a project report and a company-wide one look identical otherwise.
         scopeLabel: currentScope,
@@ -233,6 +245,7 @@ export function ReportsModal({ onClose, projectId = null, onRequestScope }: {
         stats: factsFor ? highlightStats(factsFor.facts, factsFor.comparison) : undefined,
         // Chart or table, drawn natively — never a screenshot of the canvas.
         financials: factsFor ? financialVisual(factsFor.facts) : undefined,
+        unconvertedTransactions: factsFor?.facts.unconvertedTransactions,
       });
 
       const uploadUrl = await generateUploadUrl();

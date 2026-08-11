@@ -8,9 +8,11 @@
  * @module
  */
 
+import type * as billing from "../billing.js";
 import type * as blocks from "../blocks.js";
 import type * as crons from "../crons.js";
 import type * as fx from "../fx.js";
+import type * as http from "../http.js";
 import type * as lib_identity from "../lib/identity.js";
 import type * as lib_layout from "../lib/layout.js";
 import type * as logs from "../logs.js";
@@ -27,9 +29,11 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  billing: typeof billing;
   blocks: typeof blocks;
   crons: typeof crons;
   fx: typeof fx;
+  http: typeof http;
   "lib/identity": typeof lib_identity;
   "lib/layout": typeof lib_layout;
   logs: typeof logs;
@@ -66,4 +70,6 @@ export declare const internal: FilterApi<
   FunctionReference<any, "internal">
 >;
 
-export declare const components: {};
+export declare const components: {
+  polar: import("@convex-dev/polar/_generated/component.js").ComponentApi<"polar">;
+};

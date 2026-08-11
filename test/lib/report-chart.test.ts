@@ -65,7 +65,7 @@ describe('financialVisual', () => {
     expect(financialVisual(facts)?.kind).toBe('table');
   });
 
-  it('falls back to a table across currencies — two scales cannot share one axis', () => {
+  it('keeps an unrated foreign transaction out of the single-currency visual', () => {
     const facts = buildBriefFacts([
       spend('Finance', 800, 'USD'),
       spend('Marketing', 6500, 'ZAR'),
@@ -73,10 +73,11 @@ describe('financialVisual', () => {
     const visual = financialVisual(facts);
 
     expect(visual?.kind).toBe('table');
-    // The table is what keeps the ZAR spend visible; a USD-only chart would
-    // silently drop it.
+    // It is disclosed alongside the report total rather than placed on a
+    // second, incompatible scale in the table.
     if (visual?.kind !== 'table') throw new Error('expected table');
-    expect(visual.rows.some((r) => r.value.includes('ZAR'))).toBe(true);
+    expect(visual.rows).toEqual([{ label: 'Finance', value: 'USD 800' }]);
+    expect(facts.unconvertedTransactions).toBe(1);
   });
 
   it('returns nothing when no money moved', () => {

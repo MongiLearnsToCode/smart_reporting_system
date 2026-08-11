@@ -28,9 +28,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Enforce the Pro gate server-side, not just in the UI (spec §10).
-    const tier = normalizeTier(user.user_metadata?.settings?.tier);
-    if (!tierAllows(tier, 'nlCommands')) {
+    const convex = convexForUser(session.access_token);
+
+    // Enforce the Pro gate server-side, not just in the UI (spec §10). Read from
+    // Convex, where the entitlement is derived from a Polar subscription — the
+    // old source, `user_metadata.settings.tier`, was writable by the very client
+    // this check is meant to constrain.
+    const { tier } = await convex.query(api.billing.entitlement, {});
+    if (!tierAllows(normalizeTier(tier), 'nlCommands')) {
       return NextResponse.json({ error: 'Canvas commands require the Pro plan' }, { status: 403 });
     }
 
@@ -40,7 +45,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Command is required' }, { status: 400 });
     }
 
-    const convex = convexForUser(session.access_token);
     type BlockRow = { _id: string; type: string; title: string; visible: boolean; queryConfig?: { category?: string } };
     const blocks = (await convex.query(api.blocks.list, {})) as unknown as BlockRow[];
     const known = new Map(blocks.map((b) => [b._id, b]));

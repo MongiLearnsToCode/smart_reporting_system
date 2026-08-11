@@ -23,13 +23,17 @@ describe('validation helpers', () => {
       default_widget_sort: 'recent',
       canvas_density: 'comfortable',
       data_retention_days: 90,
-      tier: 'free',
     });
   });
 
-  it('whitelists the plan tier and falls back to free', () => {
-    expect(parseSettings({ tier: 'pro' }).tier).toBe('pro');
-    expect(parseSettings({ tier: 'enterprise' }).tier).toBe('free');
+  it('refuses to carry a plan tier, however it is spelled', () => {
+    // The whole point of moving entitlement to Convex: this endpoint writes the
+    // settings blob straight into user_metadata, so any field it accepts is a
+    // field the client can set. `{"tier":"pro"}` used to be a free upgrade.
+    const parsed = parseSettings({ tier: 'pro', plan: 'pro', subscription: 'pro' }) as Record<string, unknown>;
+    expect(parsed).not.toHaveProperty('tier');
+    expect(parsed).not.toHaveProperty('plan');
+    expect(parsed).not.toHaveProperty('subscription');
   });
 
   it('rejects empty process payloads', () => {
