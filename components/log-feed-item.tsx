@@ -46,8 +46,7 @@ export function LogFeedItem({ log, onClick, highlight }: {
     >
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
-          <div className={"h-1.5 w-1.5 rounded-full " + cat.dot} />
-          <span className={"text-[11px] font-medium " + cat.text}>
+          <span className={"text-[13px] font-semibold " + cat.text}>
             {log.category}
           </span>
           {client ? (
