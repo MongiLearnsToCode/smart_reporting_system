@@ -62,6 +62,7 @@ import {
 } from "@/utils/convex/hooks";
 import type { ConvexBlockDoc } from "@/utils/convex/adapters";
 import { ReportsModal } from "@/components/reports-modal";
+import { SourceBlockModal } from "@/components/dashboard/source-block-modal";
 import { ProjectScopePicker, scopeLabel } from "@/components/project-scope-picker";
 import { logError } from "@/utils/logger";
 
@@ -885,52 +886,7 @@ export default function CodexApp() {
       </AnimatePresence>
 
       <AnimatePresence>
-        {sourceBlock ? (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-6 backdrop-blur-sm"
-            onClick={function () { setSourceBlock(null); }}
-          >
-            <div
-              className="max-h-[80vh] w-full max-w-lg overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950 shadow-2xl"
-              onClick={function (e) { e.stopPropagation(); }}
-            >
-              <div className="flex items-center justify-between border-b border-zinc-800/80 px-5 py-4">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-zinc-800 text-zinc-400">
-                    <ScrollText size={15} />
-                  </div>
-                  <div>
-                    <h2 className="text-[15px] font-semibold text-zinc-100">{sourceBlock.title}</h2>
-                    <p className="mt-0.5 text-xs text-zinc-500">Logs contributing to this block</p>
-                  </div>
-                </div>
-                <button onClick={function () { setSourceBlock(null); }} className="text-zinc-500 hover:text-zinc-200">
-                  <X size={18} />
-                </button>
-              </div>
-              <div className="max-h-[60vh] space-y-2 overflow-y-auto p-4">
-                {allLogs
-                  .filter((l) => !sourceBlock.queryConfig?.category || l.category === sourceBlock.queryConfig.category)
-                  .map((l) => (
-                    <button
-                      key={l.id}
-                      onClick={function () { setPreviewLog(l); setSourceBlock(null); }}
-                      className="block w-full rounded-lg border border-zinc-800/70 bg-zinc-900/40 p-3 text-left transition-colors hover:border-zinc-700"
-                    >
-                      <p className="text-sm text-zinc-300 line-clamp-2">{l.raw_content}</p>
-                      <p className="mt-1 font-mono text-[10px] text-zinc-600">
-                        {new Date(l.timestamp).toLocaleString()} · confidence{" "}
-                        {l.ai_confidence != null ? Math.round(l.ai_confidence * 100) + "%" : "—"}
-                      </p>
-                    </button>
-                  ))}
-              </div>
-            </div>
-          </motion.div>
-        ) : null}
+        {sourceBlock ? <SourceBlockModal block={sourceBlock} logs={allLogs} onClose={() => setSourceBlock(null)} onPreview={setPreviewLog} /> : null}
       </AnimatePresence>
 
       {showReports ? (
