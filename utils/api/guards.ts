@@ -77,7 +77,9 @@ export async function rateLimit(
     p_limit: options.limit,
     p_window_ms: options.windowMs,
   });
-  const result = Array.isArray(data) ? data[0] as { allowed?: unknown } | undefined : undefined;
+  const result = Array.isArray(data)
+    ? data[0] as { allowed?: unknown; retry_after_ms?: unknown } | undefined
+    : undefined;
   if (error || !result || typeof result.allowed !== 'boolean') {
     throw new Response(JSON.stringify({ error: 'Rate limiter unavailable' }), {
       status: 503,
@@ -85,9 +87,15 @@ export async function rateLimit(
     });
   }
   if (!result.allowed) {
-    throw new Response(JSON.stringify({ error: 'Too many requests' }), {
+    const retryAfterMs = typeof result.retry_after_ms === 'number' && result.retry_after_ms > 0
+      ? result.retry_after_ms
+      : options.windowMs;
+    throw new Response(JSON.stringify({ error: 'Too many requests', retry_after_ms: retryAfterMs }), {
       status: 429,
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Retry-After': String(Math.ceil(retryAfterMs / 1000)),
+      },
     });
   }
 }

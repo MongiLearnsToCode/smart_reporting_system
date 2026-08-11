@@ -10,6 +10,7 @@ import { ENTITY_TYPES, type LogEntity } from '@/lib/dashboard-utils';
 import { convertEntities } from '@/utils/api/fx-apply';
 import { convexForUser } from '@/utils/convex/serverClient';
 import { api } from '@/convex/_generated/api';
+import type { Id } from '@/convex/_generated/dataModel';
 import { logError } from '@/utils/logger';
 
 export async function POST(request: NextRequest) {
@@ -33,7 +34,7 @@ export async function POST(request: NextRequest) {
     let { rawContent, type, fileUrl, projectId } = parsed;
     let retryLogId: string | null = null;
     if (parsed.logId) {
-      const row = await convex.query(api.logs.getById, { id: parsed.logId as any });
+      const row = await convex.query(api.logs.getById, { id: parsed.logId as Id<'logs'> });
       if (!row) {
         return NextResponse.json({ error: 'Log not found' }, { status: 404 });
       }
@@ -109,8 +110,8 @@ export async function POST(request: NextRequest) {
     // Failure path: save the log anyway so nothing is lost; the feed offers a retry.
     if (!entities) {
       const logId = await convex.mutation(api.logs.ingest, {
-        logId: (retryLogId ?? undefined) as any,
-        projectId: projectId as any,
+        logId: retryLogId ? retryLogId as Id<'logs'> : undefined,
+        projectId: projectId ? projectId as Id<'projects'> : null,
         rawContent,
         type,
         fileUrl: fileUrl ?? null,
@@ -148,8 +149,8 @@ export async function POST(request: NextRequest) {
       recentLogs = await convex.query(api.logs.recentInCategory, {
         category,
         sinceMs: Date.now() - conflictDismissDays * 86400000,
-        excludeId: (retryLogId ?? undefined) as any,
-        projectId: projectId as any,
+        excludeId: retryLogId ? retryLogId as Id<'logs'> : undefined,
+        projectId: projectId ? projectId as Id<'projects'> : null,
       });
     }
 
@@ -196,8 +197,8 @@ Return: { "duplicate": boolean, "source_index": number | null, "reason": string 
     // Single reactive write: persists the log AND auto-creates a category block
     // if none exists (spec §6). Subscribers see the update within the §7 budget.
     const logId = await convex.mutation(api.logs.ingest, {
-      logId: (retryLogId ?? undefined) as any,
-      projectId: projectId as any,
+      logId: retryLogId ? retryLogId as Id<'logs'> : undefined,
+      projectId: projectId ? projectId as Id<'projects'> : null,
       rawContent,
       type,
       fileUrl: fileUrl ?? null,

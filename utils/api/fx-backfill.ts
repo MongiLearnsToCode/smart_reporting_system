@@ -10,6 +10,7 @@
 
 import type { ConvexHttpClient } from 'convex/browser';
 import { api } from '@/convex/_generated/api';
+import type { Id } from '@/convex/_generated/dataModel';
 import type { LogEntity } from '@/lib/dashboard-utils';
 import { normalizeCurrency } from '@/lib/fx';
 import { convertEntities } from './fx-apply';
@@ -19,7 +20,7 @@ const WRITE_CHUNK = 50;
 // Convex's generated entity type is looser than LogEntity (every field
 // optional, `type` a bare string), so the read is narrowed at this boundary —
 // the same shape normalizeEntities wrote in the first place.
-type LogRow = { _id: string; entities: LogEntity[]; timestamp: number };
+type LogRow = { _id: Id<'logs'>; entities: LogEntity[]; timestamp: number };
 
 /** Drops conversions that pointed at the previous currency, keeping the original. */
 function stripConversion(entity: LogEntity): LogEntity {
@@ -37,7 +38,7 @@ export async function reconvertAllLogs(
   if (!base) return 0;
 
   const logs = (await convex.query(api.logs.list, {})) as unknown as LogRow[];
-  const updates: { id: string; entities: LogEntity[] }[] = [];
+  const updates: { id: Id<'logs'>; entities: LogEntity[] }[] = [];
 
   for (const log of logs) {
     if (!log.entities?.length) continue;
@@ -52,7 +53,7 @@ export async function reconvertAllLogs(
   let written = 0;
   for (let i = 0; i < updates.length; i += WRITE_CHUNK) {
     written += await convex.mutation(api.logs.reconvert, {
-      updates: updates.slice(i, i + WRITE_CHUNK).map((u) => ({ id: u.id as any, entities: u.entities })),
+      updates: updates.slice(i, i + WRITE_CHUNK).map((u) => ({ id: u.id, entities: u.entities })),
     });
   }
   return written;
