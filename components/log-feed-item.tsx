@@ -36,9 +36,11 @@ export function LogFeedItem({ log, onClick, highlight }: {
 
   return (
     <motion.button
-      layout
-      initial={{ opacity: 0, x: 12 }}
-      animate={{ opacity: 1, x: 0 }}
+      layout="position"
+      initial={{ opacity: 0, y: 14, scale: 0.96 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: -10, scale: 0.96 }}
+      transition={{ type: "spring", stiffness: 420, damping: 26, mass: 0.65 }}
       onClick={onClick}
       className="group w-full text-left rounded-lg border border-zinc-800/80 bg-zinc-900/40 p-4 hover:border-zinc-700 hover:bg-zinc-900/80 transition-all"
     >

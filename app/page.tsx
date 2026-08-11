@@ -694,7 +694,7 @@ export default function CodexApp() {
                     ) : null}
                   </div>
                 ) : null}
-                <AnimatePresence initial={false}>
+                <AnimatePresence initial={false} mode="popLayout">
                   {filteredLogs.map(function (log: Log) {
                     return (
                       <LogFeedItem
