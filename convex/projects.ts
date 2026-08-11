@@ -1,4 +1,4 @@
-import { mutation, query } from './_generated/server';
+import { mutation, query, type MutationCtx, type QueryCtx } from './_generated/server';
 import { v } from 'convex/values';
 import { requireUserId, optionalUserId } from './lib/identity';
 import type { Doc, Id } from './_generated/dataModel';
@@ -6,23 +6,23 @@ import type { Doc, Id } from './_generated/dataModel';
 const NAME_MAX = 80;
 const DESCRIPTION_MAX = 240;
 
-async function listUserProjects(ctx: any, userId: string): Promise<Doc<'projects'>[]> {
+async function listUserProjects(ctx: QueryCtx | MutationCtx, userId: string): Promise<Doc<'projects'>[]> {
   return ctx.db
     .query('projects')
-    .withIndex('by_user', (q: any) => q.eq('userId', userId))
+    .withIndex('by_user', (q) => q.eq('userId', userId))
     .collect();
 }
 
-async function ownedProject(ctx: any, userId: string, id: Id<'projects'>) {
+async function ownedProject(ctx: MutationCtx, userId: string, id: Id<'projects'>): Promise<Doc<'projects'>> {
   const project = await ctx.db.get(id);
   if (!project || project.userId !== userId) throw new Error('Project not found');
   return project;
 }
 
-async function prefsRow(ctx: any, userId: string): Promise<Doc<'userPrefs'> | null> {
+async function prefsRow(ctx: QueryCtx | MutationCtx, userId: string): Promise<Doc<'userPrefs'> | null> {
   return ctx.db
     .query('userPrefs')
-    .withIndex('by_user', (q: any) => q.eq('userId', userId))
+    .withIndex('by_user', (q) => q.eq('userId', userId))
     .unique();
 }
 

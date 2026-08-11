@@ -1,5 +1,6 @@
-import { mutation, query, internalMutation } from './_generated/server';
+import { mutation, query, internalMutation, type MutationCtx, type QueryCtx } from './_generated/server';
 import { v } from 'convex/values';
+import type { Doc, Id } from './_generated/dataModel';
 import { blockType, layoutValidator, queryConfigValidator } from './schema';
 import { requireUserId, optionalUserId } from './lib/identity';
 import { defaultLayoutFor, nextFreeRow, packGrid, MIN_W, MIN_H } from './lib/layout';
@@ -60,14 +61,14 @@ const STARTER_CANVAS: Record<string, Starter[]> = {
 // Kept generously above the client toast window to avoid races.
 const UNDO_WINDOW_MS = 10_000;
 
-async function listUserBlocks(ctx: any, userId: string) {
+async function listUserBlocks(ctx: QueryCtx | MutationCtx, userId: string): Promise<Doc<'canvasBlocks'>[]> {
   return ctx.db
     .query('canvasBlocks')
-    .withIndex('by_user', (q: any) => q.eq('userId', userId))
-    .collect();
+    .withIndex('by_user', (q) => q.eq('userId', userId))
+    .take(200);
 }
 
-async function ownedBlock(ctx: any, userId: string, id: any) {
+async function ownedBlock(ctx: MutationCtx, userId: string, id: Id<'canvasBlocks'>): Promise<Doc<'canvasBlocks'>> {
   const block = await ctx.db.get(id);
   if (!block || block.userId !== userId) throw new Error('Block not found');
   return block;
@@ -80,7 +81,7 @@ export const list = query({
     const userId = await optionalUserId(ctx);
     if (!userId) return [];
     const blocks = await listUserBlocks(ctx, userId);
-    return blocks.filter((b: any) => !b.deletedAt);
+    return blocks.filter((b) => !b.deletedAt);
   },
 });
 
@@ -117,7 +118,7 @@ export const seedStarter = mutation({
   handler: async (ctx, { workType }) => {
     const userId = await requireUserId(ctx);
     const existing = await listUserBlocks(ctx, userId);
-    if (existing.some((b: any) => !b.deletedAt)) return { seeded: 0 };
+    if (existing.some((b) => !b.deletedAt)) return { seeded: 0 };
 
     const starters = STARTER_CANVAS[workType] ?? STARTER_CANVAS.other;
     const layouts = packGrid(starters.map((s) => s.type));

@@ -189,13 +189,13 @@ export function BlockCanvas({
 
   // Persist on gesture-end only (resolves spec §11 Q5). Batches the whole layout.
   function persist(next: LayoutItem[]) {
-    const byId = new Map(visible.map((b) => [b._id, b]));
+    const byId = new Map<string, ConvexBlockDoc>(visible.map((b) => [b._id, b]));
     const updates = next
       .filter((l) => {
         const b = byId.get(l.i);
         return b && !b.pinned && (b.layout.x !== l.x || b.layout.y !== l.y || b.layout.w !== l.w || b.layout.h !== l.h);
       })
-      .map((l) => ({ id: l.i as any, layout: { x: l.x, y: l.y, w: l.w, h: l.h } }));
+      .map((l) => ({ id: l.i as ConvexBlockDoc['_id'], layout: { x: l.x, y: l.y, w: l.w, h: l.h } }));
     if (updates.length) m.updateLayout({ updates });
   }
 
@@ -227,7 +227,7 @@ export function BlockCanvas({
   // Undo restores every cell we touched, so a stray click is cheap to reverse.
   function arrange() {
     const before: Placeable[] = visible.map((b) => ({ i: b._id, ...b.layout, pinned: b.pinned }));
-    const rank = new Map(visible.map((block, index) => [block._id, index]));
+    const rank = new Map<string, number>(visible.map((block, index) => [block._id, index]));
     const moved = changedCells(
       before,
       autoArrange(before, BASE_COLS, (a, b) => (rank.get(a.i) ?? 0) - (rank.get(b.i) ?? 0)),
@@ -237,7 +237,7 @@ export function BlockCanvas({
       return;
     }
     m.updateLayout({
-      updates: moved.map((l) => ({ id: l.i as any, layout: { x: l.x, y: l.y, w: l.w, h: l.h } })),
+      updates: moved.map((l) => ({ id: l.i as ConvexBlockDoc['_id'], layout: { x: l.x, y: l.y, w: l.w, h: l.h } })),
     });
     const movedIds = new Set(moved.map((l) => l.i));
     const undo = before.filter((b) => movedIds.has(b.i));
@@ -245,7 +245,7 @@ export function BlockCanvas({
       action: {
         label: 'Undo',
         onClick: () => m.updateLayout({
-          updates: undo.map((l) => ({ id: l.i as any, layout: { x: l.x, y: l.y, w: l.w, h: l.h } })),
+          updates: undo.map((l) => ({ id: l.i as ConvexBlockDoc['_id'], layout: { x: l.x, y: l.y, w: l.w, h: l.h } })),
         }),
       },
       duration: 5000,
@@ -253,9 +253,9 @@ export function BlockCanvas({
   }
 
   async function handleDelete(block: ConvexBlockDoc) {
-    await m.softDelete({ id: block._id as any });
+    await m.softDelete({ id: block._id });
     toast('Block deleted', {
-      action: { label: 'Undo', onClick: () => m.restore({ id: block._id as any }) },
+      action: { label: 'Undo', onClick: () => m.restore({ id: block._id }) },
       duration: 5000,
     });
   }
@@ -308,7 +308,7 @@ export function BlockCanvas({
           {hidden.map((b) => (
             <button
               key={b._id}
-              onClick={() => m.setVisible({ id: b._id as any, visible: true })}
+              onClick={() => m.setVisible({ id: b._id, visible: true })}
               className="flex items-center gap-1 rounded-full border border-zinc-800 px-2.5 py-0.5 text-[11px] text-zinc-400 hover:text-zinc-100"
             >
               <Eye size={11} /> {b.title}
@@ -419,7 +419,7 @@ export function BlockCanvas({
                 <form
                   onSubmit={async (e) => {
                     e.preventDefault();
-                    if (editingTitle.trim()) await m.rename({ id: block._id as any, title: editingTitle.trim() });
+                    if (editingTitle.trim()) await m.rename({ id: block._id, title: editingTitle.trim() });
                     setEditingId(null);
                   }}
                   className="flex items-center gap-1"
@@ -440,7 +440,7 @@ export function BlockCanvas({
                       type="button"
                       title={type === block.type ? `${label} (current)` : `Convert to ${label}`}
                       onClick={() => {
-                        if (type !== block.type) m.convertType({ id: block._id as any, type });
+                        if (type !== block.type) m.convertType({ id: block._id, type });
                         setConvertId(null);
                       }}
                       className={
@@ -468,7 +468,7 @@ export function BlockCanvas({
                   <IconBtn title="View source logs" onClick={() => onViewSource(block)}><FileText size={12} /></IconBtn>
                   <IconBtn
                     title={block.includeInReports ? 'In reports — click to exclude' : 'Excluded — click to include'}
-                    onClick={() => m.toggleReport({ id: block._id as any, includeInReports: !block.includeInReports })}
+                    onClick={() => m.toggleReport({ id: block._id, includeInReports: !block.includeInReports })}
                     active={block.includeInReports}
                   >
                     {block.includeInReports ? <FileText size={12} /> : <FileX size={12} />}
@@ -488,11 +488,11 @@ export function BlockCanvas({
                   >
                     {canConvert ? <Repeat size={12} /> : <Lock size={12} />}
                   </IconBtn>
-                  <IconBtn title={block.pinned ? 'Unpin' : 'Pin'} onClick={() => m.setPinned({ id: block._id as any, pinned: !block.pinned })}>
+                  <IconBtn title={block.pinned ? 'Unpin' : 'Pin'} onClick={() => m.setPinned({ id: block._id, pinned: !block.pinned })}>
                     {block.pinned ? <PinOff size={12} /> : <Pin size={12} />}
                   </IconBtn>
-                  <IconBtn title="Hide" onClick={() => m.setVisible({ id: block._id as any, visible: false })}><EyeOff size={12} /></IconBtn>
-                  <IconBtn title="Duplicate" onClick={() => m.duplicate({ id: block._id as any })}><Copy size={12} /></IconBtn>
+                  <IconBtn title="Hide" onClick={() => m.setVisible({ id: block._id, visible: false })}><EyeOff size={12} /></IconBtn>
+                  <IconBtn title="Duplicate" onClick={() => m.duplicate({ id: block._id })}><Copy size={12} /></IconBtn>
                   <IconBtn title="Delete" danger onClick={() => handleDelete(block)}><Trash2 size={12} /></IconBtn>
                 </>
               )}

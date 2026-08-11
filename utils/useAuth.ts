@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 import { createClient } from './supabase/client';
+import { csrfFetch } from './api/csrf';
 
 type Credentials = { email: string; password: string; callbackUrl?: string; redirect?: boolean };
 type SignOutOptions = { callbackUrl?: string };
@@ -14,13 +15,20 @@ function useAuth() {
   }, [supabase]);
 
   const signUpWithCredentials = useCallback(async ({ email, password }: Credentials): Promise<{ emailConfirmationRequired: boolean }> => {
-    if (!password || password.length < 8) throw new Error('Password must be at least 8 characters');
-    if (!/[A-Za-z]/.test(password) || !/\d/.test(password)) throw new Error('Password must contain at least one letter and one number');
-    const redirectTo = typeof window !== 'undefined' ? `${window.location.origin}/auth/callback` : undefined;
-    const { error } = await supabase.auth.signUp({ email, password, options: { emailRedirectTo: redirectTo } });
-    if (error) throw new Error(error.message);
+    const response = await csrfFetch('/api/auth/signup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
+    const result: unknown = await response.json();
+    if (!response.ok) {
+      const message = typeof result === 'object' && result !== null && 'error' in result && typeof result.error === 'string'
+        ? result.error
+        : 'Could not create your account';
+      throw new Error(message);
+    }
     return { emailConfirmationRequired: true };
-  }, [supabase]);
+  }, []);
 
   const signOut = useCallback(async ({ callbackUrl }: SignOutOptions = {}): Promise<void> => {
     await supabase.auth.signOut();

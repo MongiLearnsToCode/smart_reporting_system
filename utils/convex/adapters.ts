@@ -2,9 +2,10 @@
 // current helpers (lib/dashboard-utils.ts) and block components keep working
 // unchanged against the new data layer.
 import type { Log, LogEntity, Widget } from '@/lib/dashboard-utils';
+import type { Id } from '@/convex/_generated/dataModel';
 
 export type ConvexProjectDoc = {
-  _id: string;
+  _id: Id<'projects'>;
   userId: string;
   name: string;
   description?: string | null;
@@ -13,9 +14,9 @@ export type ConvexProjectDoc = {
 };
 
 export type ConvexLogDoc = {
-  _id: string;
+  _id: Id<'logs'>;
   userId: string;
-  projectId?: string | null;
+  projectId?: Id<'projects'> | null;
   rawContent: string;
   type?: string | null;
   fileUrl?: string | null;
@@ -32,7 +33,7 @@ export type ConvexLogDoc = {
 };
 
 export type ConvexBlockDoc = {
-  _id: string;
+  _id: Id<'canvasBlocks'>;
   userId: string;
   type: string;
   title: string;
