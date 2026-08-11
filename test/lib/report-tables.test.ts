@@ -67,7 +67,7 @@ describe('highlightStats', () => {
       { label: 'Approx. net position', value: 'USD 3,800' },
       { label: 'Approx. income', value: 'USD 5,000' },
       { label: 'Approx. spend', value: 'USD 1,200' },
-      { label: 'Delivered', value: '1' },
+      { label: 'Delivered', value: '1', detail: 'Logo' },
     ]);
   });
 
@@ -133,6 +133,19 @@ describe('highlightStats', () => {
       log({ entities: [entity({ type: 'task', status: 'open', task: 'A' })] }),
       log({ entities: [entity({ type: 'task', status: 'in_progress', task: 'B' })] }),
     ]);
-    expect(highlightStats(facts)).toContainEqual({ label: 'Outstanding', value: '2' });
+    expect(highlightStats(facts)).toContainEqual({ label: 'Outstanding', value: '2', detail: 'A · B' });
+  });
+
+  it('uses specific work as context and avoids duplicating delivered work as completed tasks', () => {
+    const facts = buildBriefFacts([
+      log({ entities: [entity({ type: 'task', status: 'complete', deliverable: 'Brand guidelines' })] }),
+      log({ entities: [entity({ type: 'task', status: 'complete', deliverable: 'Design system' })] }),
+      log({ entities: [entity({ type: 'task', status: 'blocked', task: 'Printer contract' })] }),
+    ]);
+
+    expect(highlightStats(facts)).toEqual([
+      { label: 'Delivered', value: '2', detail: 'Brand guidelines · Design system' },
+      { label: 'Awaiting decision', value: '1', detail: 'Printer contract' },
+    ]);
   });
 });

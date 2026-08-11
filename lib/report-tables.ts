@@ -12,7 +12,15 @@ export type Stat = {
   value: string;
   /** Direction of travel, rendered on its own line — see deltaLabel. */
   delta?: string;
+  /** Specific context for a count, rather than a second vague count. */
+  detail?: string;
 };
+
+function namedItems(items: string[], fallback: string): string {
+  if (items.length === 0) return fallback;
+  if (items.length === 1) return items[0];
+  return `${items.slice(0, 2).join(' · ')}${items.length > 2 ? ` +${items.length - 2}` : ''}`;
+}
 
 /** Spend by category, largest first, with a total row when it adds context. */
 export function financialRows(facts: BriefFacts): TableRow[] {
@@ -48,18 +56,29 @@ export function highlightStats(facts: BriefFacts, comparison?: BriefComparison |
     stats.push({ label: "Approx. spend", value: formatTotals(facts.spend), delta: deltaLabel(facts.spend, comparison?.spend) });
   }
   if (stats.length < 4 && facts.deliverables.length > 0) {
-    stats.push({ label: "Delivered", value: String(facts.deliverables.length) });
-  }
-  if (stats.length < 4 && facts.tasks.completed > 0) {
-    stats.push({ label: "Completed", value: String(facts.tasks.completed) });
+    stats.push({
+      label: "Delivered",
+      value: String(facts.deliverables.length),
+      detail: namedItems(facts.deliverables, "Deliverables completed"),
+    });
+  } else if (stats.length < 4 && facts.tasks.completed > 0) {
+    stats.push({ label: "Completed", value: String(facts.tasks.completed), detail: "Tasks completed" });
   }
   if (stats.length < 4 && facts.blockedItems.length > 0) {
-    stats.push({ label: "Awaiting decision", value: String(facts.blockedItems.length) });
+    stats.push({
+      label: "Awaiting decision",
+      value: String(facts.blockedItems.length),
+      detail: namedItems(facts.blockedItems, "Decision required"),
+    });
   }
 
   const outstanding = facts.tasks.open + facts.tasks.inProgress;
   if (stats.length < 4 && outstanding > 0) {
-    stats.push({ label: "Outstanding", value: String(outstanding) });
+    stats.push({
+      label: "Outstanding",
+      value: String(outstanding),
+      detail: namedItems(facts.openItems, "Work in progress"),
+    });
   }
   // Last resort only. An entry count says how much the tool was used, which is
   // the one thing the reader has no use for — it appears when the period

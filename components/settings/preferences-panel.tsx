@@ -191,7 +191,9 @@ export function PreferencesPanel() {
           <ToggleGroup
             type="single"
             value={form.canvas_density}
-            onValueChange={(v: string) => { if (v) set('canvas_density', v); }}
+            onValueChange={(v: string) => {
+              if (v === 'comfortable' || v === 'compact') set('canvas_density', v);
+            }}
             className={groupClass}
           >
             <ToggleGroupItem value="comfortable" className={itemClass}>Comfortable</ToggleGroupItem>

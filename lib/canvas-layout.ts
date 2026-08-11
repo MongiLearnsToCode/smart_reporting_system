@@ -41,15 +41,15 @@ export function canvasCols(
  * Column width in pixels. Fixed for the life of a viewport size: a block is
  * the same size whether the canvas is twelve columns or ninety.
  */
-export function colWidthPx(containerWidth: number, base = BASE_COLS): number {
+export function colWidthPx(containerWidth: number, base = BASE_COLS, margin = GRID_MARGIN): number {
   // Mirrors react-grid-layout's calcGridColWidth with containerPadding == margin.
-  const usable = containerWidth - GRID_MARGIN * (base + 1);
+  const usable = containerWidth - margin * (base + 1);
   return Math.max(MIN_COL_PX, usable / base);
 }
 
 /** Pixel width to hand react-grid-layout so `cols` columns come out at `colWidth`. */
-export function gridWidthPx(cols: number, colWidth: number): number {
-  return colWidth * cols + GRID_MARGIN * (cols + 1);
+export function gridWidthPx(cols: number, colWidth: number, margin = GRID_MARGIN): number {
+  return colWidth * cols + margin * (cols + 1);
 }
 
 /**
@@ -59,8 +59,12 @@ export function gridWidthPx(cols: number, colWidth: number): number {
  * Pinned blocks are obstacles, not cargo: they keep their exact cell and
  * everything else flows around them.
  */
-export function autoArrange(items: Placeable[], cols = BASE_COLS): Placeable[] {
-  const ordered = [...items].sort((a, b) => a.y - b.y || a.x - b.x);
+export function autoArrange(
+  items: Placeable[],
+  cols = BASE_COLS,
+  compare: (a: Placeable, b: Placeable) => number = (a, b) => a.y - b.y || a.x - b.x,
+): Placeable[] {
+  const ordered = [...items].sort(compare);
   // Sparse row map — the canvas is unbounded downwards, so rows are created
   // on demand rather than sized up front.
   const rows = new Map<number, boolean[]>();

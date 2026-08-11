@@ -52,7 +52,7 @@ import { LogFeedItem } from "@/components/log-feed-item";
 import { Composer } from "@/components/composer";
 import { BlockCanvas } from "@/components/block-canvas";
 import { getCat } from "@/lib/categories";
-import { uniqueClients, logClients, type Log, type UserSettings } from "@/lib/dashboard-utils";
+import { retainedLogs, uniqueClients, logClients, type Log, type UserSettings } from "@/lib/dashboard-utils";
 import { filterFeed, snapshotFor } from "@/lib/log-search";
 import { tierAllows, upsellFor } from "@/lib/tiers";
 import { CanvasCommandModal } from "@/components/canvas-command-modal";
@@ -152,23 +152,6 @@ export default function CodexApp() {
   const { logs: allLogsRaw } = useLogs(viewScope);
   const { blocks } = useBlocks();
   const logMutations = useLogMutations();
-
-  // Time-travel slider filters the feed/canvas client-side to a past snapshot.
-  const allLogs = useMemo(
-    function () {
-      if (timeValue >= 100) return allLogsRaw;
-      const snapshot = Date.now() - (100 - timeValue) * 86400000;
-      return allLogsRaw.filter((l) => new Date(l.timestamp).getTime() <= snapshot);
-    },
-    [allLogsRaw, timeValue],
-  );
-
-  // Pagination is obsolete under Convex reactivity; keep stubs so the feed JSX
-  // renders unchanged.
-  const hasMoreLogs = false;
-  const isLoadingMore = false;
-  function loadMoreLogs() {}
-
   const settingsQuery = useQuery({
     queryKey: ["settings"],
     enabled: !!user,
@@ -177,6 +160,26 @@ export default function CodexApp() {
       return res.json();
     },
   });
+  const userSettings = (settingsQuery.data && settingsQuery.data.settings) || {};
+  const retentionDays = (userSettings as Partial<UserSettings>).data_retention_days ?? 90;
+
+  // Retention narrows the visible dashboard, while time travel can further
+  // narrow that retained history to a past snapshot. Nothing is deleted.
+  const allLogs = useMemo(
+    function () {
+      const retained = retainedLogs(allLogsRaw, retentionDays);
+      if (timeValue >= 100) return retained;
+      const snapshot = Date.now() - (100 - timeValue) * 86400000;
+      return retained.filter((l) => new Date(l.timestamp).getTime() <= snapshot);
+    },
+    [allLogsRaw, timeValue, retentionDays],
+  );
+
+  // Pagination is obsolete under Convex reactivity; keep stubs so the feed JSX
+  // renders unchanged.
+  const hasMoreLogs = false;
+  const isLoadingMore = false;
+  function loadMoreLogs() {}
 
   const processMutation = useMutation({
     mutationFn: async function (payload: {
@@ -207,7 +210,6 @@ export default function CodexApp() {
     },
   });
 
-  const userSettings = (settingsQuery.data && settingsQuery.data.settings) || {};
   // Not a setting — see convex/billing.ts. Comes from the subscription.
   const { tier } = useEntitlement();
 
@@ -296,13 +298,16 @@ export default function CodexApp() {
     useLogSearch(searchQuery, viewScope, selectedCategory);
   const filteredLogs = useMemo(
     function () {
-      return filterFeed(searchActive ? searchResults : allLogs, {
+      // Search is index-backed and can return logs outside the subscribed list,
+      // so apply the same retention rule before the common feed filters.
+      const source = searchActive ? retainedLogs(searchResults, retentionDays) : allLogs;
+      return filterFeed(source, {
         category: selectedCategory,
         client: selectedClient,
         snapshotMs: snapshotFor(timeValue),
       });
     },
-    [searchActive, searchResults, allLogs, selectedCategory, selectedClient, timeValue],
+    [searchActive, searchResults, allLogs, retentionDays, selectedCategory, selectedClient, timeValue],
   );
   const uniqueCategories = Array.from(
     new Set(
@@ -525,6 +530,8 @@ export default function CodexApp() {
             tier={tier}
             projectId={viewScope}
             currency={(userSettings as Partial<UserSettings>).currency ?? null}
+            density={(userSettings as Partial<UserSettings>).canvas_density ?? 'comfortable'}
+            sortOrder={(userSettings as Partial<UserSettings>).default_widget_sort ?? 'title'}
           />
         </main>
 

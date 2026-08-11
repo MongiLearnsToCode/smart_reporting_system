@@ -304,6 +304,7 @@ export async function buildReportPdf(input: ReportPdfInput): Promise<Blob> {
                 <Text style={styles.statLabel}>{s.label}</Text>
                 <Text style={styles.statValue}>{s.value}</Text>
                 {s.delta ? <Text style={styles.statDelta}>{s.delta} vs previous</Text> : null}
+                {s.detail ? <Text style={styles.statDelta}>{s.detail}</Text> : null}
               </View>
             ))}
           </View>

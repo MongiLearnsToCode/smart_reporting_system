@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   entitiesOf, logAmount, logClients, logSentiment, logUrgency,
-  primaryEntity, uniqueClients, type Log, type LogEntity,
+  primaryEntity, retainedLogs, sortCanvasBlocks, uniqueClients, type Log, type LogEntity,
 } from '../../lib/dashboard-utils';
 
 function log(overrides: Partial<Log>): Log {
@@ -131,5 +131,27 @@ describe('uniqueClients (entity arrays)', () => {
       log({ entities: [entity({ client: 'Meridian Corp' })] }),
     ];
     expect(uniqueClients(logs)).toEqual(['Meridian Corp', 'Acme Studios']);
+  });
+});
+
+describe('dashboard preferences', () => {
+  it('keeps only logs within the requested retention window', () => {
+    const now = Date.UTC(2026, 7, 11);
+    const logs = [
+      log({ id: 'recent', timestamp: new Date(now - 29 * 86400000).toISOString() }),
+      log({ id: 'old', timestamp: new Date(now - 31 * 86400000).toISOString() }),
+    ];
+    expect(retainedLogs(logs, 30, now).map((entry) => entry.id)).toEqual(['recent']);
+  });
+
+  it('orders blocks consistently for title, oldest-first, and recent-first views', () => {
+    const blocks = [
+      { title: 'Zulu', createdAt: 30 },
+      { title: 'Alpha', createdAt: 20 },
+      { title: 'Meridian', createdAt: 10 },
+    ];
+    expect(sortCanvasBlocks(blocks, 'title').map((block) => block.title)).toEqual(['Alpha', 'Meridian', 'Zulu']);
+    expect(sortCanvasBlocks(blocks, 'created').map((block) => block.title)).toEqual(['Meridian', 'Alpha', 'Zulu']);
+    expect(sortCanvasBlocks(blocks, 'recent').map((block) => block.title)).toEqual(['Zulu', 'Alpha', 'Meridian']);
   });
 });

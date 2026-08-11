@@ -12,7 +12,7 @@ import {
   FileText, FileX, ListPlus, Sparkles, Loader2, Repeat, Lock,
   Hash, BarChart3, List, Clock, ScrollText, Check, Plus, X, LayoutGrid, Crosshair,
 } from 'lucide-react';
-import { logAmount, type Log } from '@/lib/dashboard-utils';
+import { logAmount, sortCanvasBlocks, type Log, type UserSettings } from '@/lib/dashboard-utils';
 import { getCat } from '@/lib/categories';
 import type { ConvexBlockDoc } from '@/utils/convex/adapters';
 import { useBlockMutations } from '@/utils/convex/hooks';
@@ -48,6 +48,8 @@ export function BlockCanvas({
   tier = 'free',
   projectId = null,
   currency = null,
+  density = 'comfortable',
+  sortOrder = 'title',
 }: {
   blocks: ConvexBlockDoc[];
   logs: Log[];
@@ -55,6 +57,8 @@ export function BlockCanvas({
   tier?: Tier;
   /** The user's default currency; every figure a block totals is stated in it. */
   currency?: string | null;
+  density?: UserSettings['canvas_density'];
+  sortOrder?: UserSettings['default_widget_sort'];
   /** Scope the canvas is showing; narrows AI summaries to the same logs. */
   projectId?: string | null;
 }) {
@@ -129,8 +133,14 @@ export function BlockCanvas({
     }
   }
 
-  const visible = useMemo(() => blocks.filter((b) => b.visible), [blocks]);
-  const hidden = useMemo(() => blocks.filter((b) => !b.visible), [blocks]);
+  const visible = useMemo(
+    () => sortCanvasBlocks(blocks.filter((b) => b.visible), sortOrder),
+    [blocks, sortOrder],
+  );
+  const hidden = useMemo(
+    () => sortCanvasBlocks(blocks.filter((b) => !b.visible), sortOrder),
+    [blocks, sortOrder],
+  );
 
   const layout: LayoutItem[] = useMemo(
     () =>
@@ -172,8 +182,10 @@ export function BlockCanvas({
     () => Math.max(0, ...layout.map((l) => l.x + l.w)) - BASE_COLS,
     [layout],
   );
-  const colWidth = colWidthPx(wrapWidth);
-  const gridWidth = gridWidthPx(cols, colWidth);
+  const gridMargin = density === 'compact' ? 8 : GRID_MARGIN;
+  const rowHeight = density === 'compact' ? 44 : ROW_HEIGHT;
+  const colWidth = colWidthPx(wrapWidth, BASE_COLS, gridMargin);
+  const gridWidth = gridWidthPx(cols, colWidth, gridMargin);
 
   // Persist on gesture-end only (resolves spec §11 Q5). Batches the whole layout.
   function persist(next: LayoutItem[]) {
@@ -215,7 +227,11 @@ export function BlockCanvas({
   // Undo restores every cell we touched, so a stray click is cheap to reverse.
   function arrange() {
     const before: Placeable[] = visible.map((b) => ({ i: b._id, ...b.layout, pinned: b.pinned }));
-    const moved = changedCells(before, autoArrange(before));
+    const rank = new Map(visible.map((block, index) => [block._id, index]));
+    const moved = changedCells(
+      before,
+      autoArrange(before, BASE_COLS, (a, b) => (rank.get(a.i) ?? 0) - (rank.get(b.i) ?? 0)),
+    );
     if (!moved.length) {
       toast('Canvas is already tidy');
       return;
@@ -363,8 +379,9 @@ export function BlockCanvas({
         // its own container. Without this the headroom columns exist in the
         // maths but there is nothing to scroll into and nowhere to drop.
         style={{ width: gridWidth }}
-        rowHeight={ROW_HEIGHT}
-        margin={[GRID_MARGIN, GRID_MARGIN]}
+        rowHeight={rowHeight}
+        margin={[gridMargin, gridMargin]}
+        containerPadding={[gridMargin, gridMargin]}
         draggableHandle=".block-drag-handle"
         draggableCancel=".block-no-drag"
         onDragStart={() => { draggingRef.current = true; }}

@@ -223,6 +223,32 @@ export type UserSettings = {
   conflict_detection: boolean;
   conflict_dismiss_days: number;
   default_widget_sort: "title" | "created" | "recent";
-  canvas_density: string;
+  canvas_density: "comfortable" | "compact";
   data_retention_days: number;
 };
+
+/** Keeps the dashboard's visible history within the user's retention window. */
+export function retainedLogs(logs: Log[], retentionDays: number, now = Date.now()): Log[] {
+  const days = Number.isInteger(retentionDays) ? Math.min(365, Math.max(1, retentionDays)) : 90;
+  const cutoff = now - days * 86400000;
+  return logs.filter((log) => {
+    const timestamp = new Date(log.timestamp).getTime();
+    // Keep malformed historical records visible rather than hiding them solely
+    // because their date cannot be interpreted.
+    return !Number.isFinite(timestamp) || timestamp >= cutoff;
+  });
+}
+
+type CanvasBlockLike = { title: string; createdAt: number };
+
+/** Stable block order for the canvas index and Auto-arrange action. */
+export function sortCanvasBlocks<T extends CanvasBlockLike>(
+  blocks: T[],
+  order: UserSettings['default_widget_sort'],
+): T[] {
+  return [...blocks].sort((a, b) => {
+    if (order === 'title') return a.title.localeCompare(b.title) || b.createdAt - a.createdAt;
+    if (order === 'created') return a.createdAt - b.createdAt || a.title.localeCompare(b.title);
+    return b.createdAt - a.createdAt || a.title.localeCompare(b.title);
+  });
+}
